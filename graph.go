@@ -1,7 +1,11 @@
 package main
 
-func BuildGraph(collection GeoJSONFeatureCollection) map[string][]string {
-	graph := make(map[string][]string)
+type Graph struct {
+	edges map[string][]string
+}
+
+func BuildGraph(collection GeoJSONFeatureCollection) Graph {
+	g := Graph{edges: make(map[string][]string)}
 	for _, f := range collection.Features {
 		if f.Properties.AssetType != "Line" {
 			continue
@@ -12,13 +16,13 @@ func BuildGraph(collection GeoJSONFeatureCollection) map[string][]string {
 		}
 		bus1 := ca.Sources[0]
 		bus2 := ca.Targets[0]
-		graph[bus1] = append(graph[bus1], bus2)
-		graph[bus2] = append(graph[bus2], bus1)
+		g.edges[bus1] = append(g.edges[bus1], bus2)
+		g.edges[bus2] = append(g.edges[bus2], bus1)
 	}
-	return graph
+	return g
 }
 
-func ShortestPath(graph map[string][]string, source, target string) int {
+func (g Graph) ShortestPath(source, target string) int {
 	if source == target {
 		return 0
 	}
@@ -31,7 +35,7 @@ func ShortestPath(graph map[string][]string, source, target string) int {
 	for len(queue) > 0 {
 		curr := queue[0]
 		queue = queue[1:]
-		for _, neighbor := range graph[curr.node] {
+		for _, neighbor := range g.edges[curr.node] {
 			if neighbor == target {
 				return curr.dist + 1
 			}

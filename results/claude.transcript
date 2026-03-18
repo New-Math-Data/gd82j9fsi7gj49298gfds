@@ -41,3 +41,7 @@
 [User] Add support for single-dash flags alongside cobra's double-dash.
 
 [Claude] Added normalizeDashes helper in main.go: walks os.Args before cobra sees them, rewrites any single-dash multi-character flag (e.g. -circuit_model) to double-dash (--circuit_model), leaving single-char flags like -h untouched. Passed normalized args via root.SetArgs. Both -flag and --flag now work.
+
+[User] Make the code more object-oriented: wrap the graph map in a Graph struct. Also break up the tests into separate files per source file (geojson_test.go, opendss_test.go, graph_test.go).
+
+[Claude] Updated graph.go: introduced Graph struct with unexported edges field; BuildGraph returns Graph; ShortestPath becomes a method (g Graph) ShortestPath(...); RunDistance in main.go updated to call graph.ShortestPath(...). Deleted main_test.go and created three test files: graph_test.go (ShortestPath and BuildGraph tests, constructing Graph{edges: ...} directly since tests are in the same package), opendss_test.go (normalizeBusID, parseSpecs, ParseBusCoords, ParseCircuitModel, WireConnectivity), geojson_test.go (LoadGeoJSON round-trip via temp file). All 11 tests pass.

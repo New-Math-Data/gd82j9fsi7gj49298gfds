@@ -55,7 +55,7 @@ func RunConvert(circuitModel, busCoords, outputFile string) {
 func RunDistance(inputFile, sourceNode, targetNode string) {
 	collection := LoadGeoJSON(inputFile)
 	graph := BuildGraph(collection)
-	distance := ShortestPath(graph, sourceNode, targetNode)
+	distance := graph.ShortestPath(sourceNode, targetNode)
 	fmt.Printf("Shortest path from %s to %s: %d\n", sourceNode, targetNode, distance)
 }
 
