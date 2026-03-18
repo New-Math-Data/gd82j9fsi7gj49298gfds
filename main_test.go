@@ -115,11 +115,12 @@ func TestParseSpecsQuotedMultiToken(t *testing.T) {
 func TestParseSpecsBracketArrayTokens(t *testing.T) {
 	tokens := []string{`Z1=[0.141506,`, `1.399508]`}
 	specs := parseSpecs(tokens)
-	if got, _ := specs["Z1"].(string); got != "[0.141506," {
-		t.Errorf("Z1 = %q, want %q", got, "[0.141506,")
+	want := "[0.141506, 1.399508]"
+	if got, _ := specs["Z1"].(string); got != want {
+		t.Errorf("Z1 = %q, want %q", got, want)
 	}
-	if got, _ := specs["1.399508]"].(string); got != "true" {
-		t.Errorf(`specs["1.399508]"] = %q, want "true"`, got)
+	if _, exists := specs["1.399508]"]; exists {
+		t.Error(`specs["1.399508]"] should not exist as a key`)
 	}
 }
 

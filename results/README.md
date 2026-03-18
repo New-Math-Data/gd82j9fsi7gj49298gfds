@@ -22,5 +22,5 @@ All implementation is in `main.go`. The comments throughout are my own additions
 
 Key design decisions I drove:
 - `normalizeBusID` handles both `.` and `_` separators, with the special case that only numeric-prefix `_` splits are applied (e.g. `tyn201_feeder` is a line ID, not a bus)
-- `parseSpecs` accumulates multi-token quoted values (for `wires="..."`) and stores bracket-array tokens naively (matching the expected output exactly)
+- `parseSpecs` accumulates multi-token quoted values (for `wires="..."`) and bracket-array values (for `Z1=[0.141506, 1.399508]`) — the latter deviates from the README's expected output, which shows a spec error: the README naively splits on whitespace and produces `"Z1": "[0.141506,"` and `"1.399508]": "true"`, which is clearly wrong. The implementation instead produces `"Z1": "[0.141506, 1.399508]"`.
 - BFS uses a visited set — necessary for undirected graphs even when the underlying data is acyclic
