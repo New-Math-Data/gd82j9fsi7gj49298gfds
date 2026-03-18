@@ -5,6 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 )
 
 // --- GeoJSON Type Definitions ---
@@ -41,7 +43,6 @@ type Properties struct {
 
 // --- Utility Functions ---
 
-// SplitLines splits a string into lines, handling both \n and \r\n line endings.
 func SplitLines(s string) []string {
 	var lines []string
 	start := 0
@@ -65,45 +66,219 @@ func SplitLines(s string) []string {
 	return lines
 }
 
+func normalizeBusID(raw string) string {
+	dotParts := strings.SplitN(raw, ".", 2)
+	base := dotParts[0]
+	underParts := strings.SplitN(base, "_", 2)
+	if len(underParts) > 1 {
+		if _, err := strconv.Atoi(underParts[0]); err == nil {
+			return underParts[0]
+		}
+	}
+	return base
+}
+
 // --- Part 1: Convert Command Functions ---
 
-// ParseBusCoords reads the bus coordinates CSV file and returns a slice of
-// Bus features and a map of bus ID -> *Feature for coordinate lookups.
 func ParseBusCoords(filePath string) ([]Feature, map[string]*Feature) {
-	// TODO: Implement bus coordinate parsing
-	// 1. Read the file
-	// 2. For each line, split on comma to get: bus_id, latitude, longitude
-	// 3. Create a Feature with Point geometry (remember: GeoJSON is [lon, lat])
-	// 4. Return the features and a lookup map keyed by bus ID
-	return nil, nil
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading bus coords: %v\n", err)
+		os.Exit(1)
+	}
+
+	var buses []Feature
+	for _, line := range SplitLines(string(data)) {
+		if line == "" {
+			continue
+		}
+		parts := strings.Split(line, ",")
+		if len(parts) < 3 {
+			continue
+		}
+		id := strings.TrimSpace(parts[0])
+		lat, _ := strconv.ParseFloat(strings.TrimSpace(parts[1]), 64)
+		lon, _ := strconv.ParseFloat(strings.TrimSpace(parts[2]), 64)
+
+		coords, _ := json.Marshal([]float64{lon, lat})
+		buses = append(buses, Feature{
+			Type: "Feature",
+			Geometry: Geometry{
+				Type:        "Point",
+				Coordinates: coords,
+			},
+			Properties: Properties{
+				ID:            id,
+				Name:          id,
+				AssetType:     "Bus",
+				GlossaryTerms: []string{"POWERFLOW"},
+				ConnectedAssets: ConnectedAssets{
+					Sources: []string{},
+					Targets: []string{},
+				},
+			},
+		})
+	}
+
+	busMap := make(map[string]*Feature)
+	for i := range buses {
+		busMap[buses[i].Properties.ID] = &buses[i]
+	}
+	return buses, busMap
 }
 
-// ParseCircuitModel reads the DSS circuit model file and returns Line features
-// and Vsource features.
+func parseSpecs(tokens []string) map[string]interface{} {
+	specs := make(map[string]interface{})
+	var accumKey string
+	var accumParts []string
+
+	for _, tok := range tokens {
+		if accumKey != "" {
+			accumParts = append(accumParts, tok)
+			if strings.HasSuffix(tok, "\"") {
+				specs[accumKey] = strings.Join(accumParts, " ")
+				accumKey = ""
+				accumParts = nil
+			}
+			continue
+		}
+		eqIdx := strings.Index(tok, "=")
+		if eqIdx >= 0 {
+			k := tok[:eqIdx]
+			v := tok[eqIdx+1:]
+			if strings.HasPrefix(v, "\"") && !strings.HasSuffix(v, "\"") {
+				accumKey = k
+				accumParts = []string{v}
+			} else {
+				specs[k] = v
+			}
+		} else {
+			specs[tok] = "true"
+		}
+	}
+	return specs
+}
+
 func ParseCircuitModel(filePath string) ([]Feature, []Feature) {
-	// TODO: Implement circuit model parsing
-	// 1. Read the file and split into lines
-	// 2. Identify Line definitions (start with: New "Line.<id>")
-	// 3. Identify Vsource definitions (second field contains "Vsource.<id>", can be New or Edit)
-	// 4. For each Line, parse key=value pairs into Specifications
-	// 5. For each Vsource, parse key=value pairs into Specifications
-	// 6. Return the two slices of features
-	return nil, nil
-}
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading circuit model: %v\n", err)
+		os.Exit(1)
+	}
 
-// WireConnectivity connects Lines and Vsources to their respective Buses,
-// resolving geometries and populating connected_assets on all features.
-func WireConnectivity(buses []Feature, busMap map[string]*Feature, lines []Feature, vsources []Feature) ([]Feature, []Feature) {
-	// TODO: Implement connectivity wiring
-	// 1. For each Line: normalize bus1/bus2 IDs, set connected_assets, resolve LineString geometry
-	// 2. For each Vsource: set connected_assets.targets to the connected bus
-	// 3. Update Bus connected_assets to reference their connected Lines and Vsources
-	// 4. Resolve Vsource geometry from the connected bus coordinates
+	var lines []Feature
+	var vsources []Feature
+
+	for _, rawLine := range SplitLines(string(data)) {
+		rawLine = strings.TrimSpace(rawLine)
+		if rawLine == "" {
+			continue
+		}
+		tokens := strings.Fields(rawLine)
+		if len(tokens) < 2 {
+			continue
+		}
+
+		isLine := tokens[0] == "New" && strings.HasPrefix(tokens[1], "\"Line.")
+		isVsource := strings.Contains(tokens[1], "\"Vsource.")
+
+		if !isLine && !isVsource {
+			continue
+		}
+
+		fullID := strings.Trim(tokens[1], "\"")
+		parts := strings.SplitN(fullID, ".", 2)
+		id := ""
+		if len(parts) == 2 {
+			id = parts[1]
+		}
+
+		specs := parseSpecs(tokens[2:])
+
+		if isLine {
+			lines = append(lines, Feature{
+				Type: "Feature",
+				Geometry: Geometry{
+					Type: "LineString",
+				},
+				Properties: Properties{
+					ID:              "Line." + id,
+					Name:            "Line." + id,
+					AssetType:       "Line",
+					Specifications:  specs,
+					GlossaryTerms:   []string{},
+					ConnectedAssets: ConnectedAssets{Sources: []string{}, Targets: []string{}},
+				},
+			})
+		} else {
+			vsources = append(vsources, Feature{
+				Type: "Feature",
+				Geometry: Geometry{
+					Type: "Point",
+				},
+				Properties: Properties{
+					ID:              "Vsource." + id,
+					Name:            "Vsource." + id,
+					AssetType:       "Vsource",
+					Specifications:  specs,
+					GlossaryTerms:   []string{"POWERFLOW"},
+					ConnectedAssets: ConnectedAssets{Sources: []string{}, Targets: []string{}},
+				},
+			})
+		}
+	}
+
 	return lines, vsources
 }
 
-// RunConvert executes the "convert" subcommand: parses OpenDSS data and writes
-// a GeoJSON FeatureCollection to the specified output file.
+func WireConnectivity(buses []Feature, busMap map[string]*Feature, lines []Feature, vsources []Feature) ([]Feature, []Feature) {
+	for i := range lines {
+		specs := lines[i].Properties.Specifications
+		bus1Raw, _ := specs["bus1"].(string)
+		bus2Raw, _ := specs["bus2"].(string)
+		bus1ID := normalizeBusID(bus1Raw)
+		bus2ID := normalizeBusID(bus2Raw)
+
+		lines[i].Properties.ConnectedAssets.Sources = []string{bus1ID}
+		lines[i].Properties.ConnectedAssets.Targets = []string{bus2ID}
+
+		b1, ok1 := busMap[bus1ID]
+		b2, ok2 := busMap[bus2ID]
+
+		if ok1 && ok2 {
+			var coord1, coord2 []float64
+			json.Unmarshal(b1.Geometry.Coordinates, &coord1)
+			json.Unmarshal(b2.Geometry.Coordinates, &coord2)
+			lineCoords, _ := json.Marshal([][]float64{coord1, coord2})
+			lines[i].Geometry.Coordinates = lineCoords
+		}
+
+		lineRef := lines[i].Properties.ID
+		if ok1 {
+			b1.Properties.ConnectedAssets.Targets = append(b1.Properties.ConnectedAssets.Targets, lineRef)
+		}
+		if ok2 {
+			b2.Properties.ConnectedAssets.Sources = append(b2.Properties.ConnectedAssets.Sources, lineRef)
+		}
+	}
+
+	for i := range vsources {
+		specs := vsources[i].Properties.Specifications
+		bus1Raw, _ := specs["bus1"].(string)
+		bus1ID := normalizeBusID(bus1Raw)
+
+		vsources[i].Properties.ConnectedAssets.Targets = []string{bus1ID}
+		vsources[i].Properties.ConnectedAssets.Sources = []string{}
+
+		if b, ok := busMap[bus1ID]; ok {
+			vsources[i].Geometry.Coordinates = b.Geometry.Coordinates
+			b.Properties.ConnectedAssets.Sources = append(b.Properties.ConnectedAssets.Sources, vsources[i].Properties.ID)
+		}
+	}
+
+	return lines, vsources
+}
+
 func RunConvert(circuitModel, busCoords, outputFile string) {
 	buses, busMap := ParseBusCoords(busCoords)
 	lines, vsources := ParseCircuitModel(circuitModel)
@@ -135,40 +310,61 @@ func RunConvert(circuitModel, busCoords, outputFile string) {
 
 // --- Part 2: Distance Command Functions ---
 
-// LoadGeoJSON reads a GeoJSON FeatureCollection from a file and returns
-// the parsed collection.
 func LoadGeoJSON(filePath string) GeoJSONFeatureCollection {
-	// TODO: Implement GeoJSON loading
-	// 1. Read the file
-	// 2. Unmarshal JSON into a GeoJSONFeatureCollection
-	// 3. Return the collection
-	return GeoJSONFeatureCollection{}
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading GeoJSON: %v\n", err)
+		os.Exit(1)
+	}
+	var collection GeoJSONFeatureCollection
+	json.Unmarshal(data, &collection)
+	return collection
 }
 
-// BuildGraph constructs an adjacency list representation of the network graph
-// from a GeoJSON FeatureCollection. Buses are nodes, Lines are undirected edges.
 func BuildGraph(collection GeoJSONFeatureCollection) map[string][]string {
-	// TODO: Implement graph construction
-	// 1. Iterate over features, filtering for assetType == "Line"
-	// 2. For each Line, read connected_assets.sources[0] and connected_assets.targets[0]
-	// 3. Add an undirected edge between them in the adjacency list
-	// 4. Return the adjacency list as map[busID] -> []neighborBusIDs
-	return nil
+	graph := make(map[string][]string)
+	for _, f := range collection.Features {
+		if f.Properties.AssetType != "Line" {
+			continue
+		}
+		ca := f.Properties.ConnectedAssets
+		if len(ca.Sources) == 0 || len(ca.Targets) == 0 {
+			continue
+		}
+		bus1 := ca.Sources[0]
+		bus2 := ca.Targets[0]
+		graph[bus1] = append(graph[bus1], bus2)
+		graph[bus2] = append(graph[bus2], bus1)
+	}
+	return graph
 }
 
-// ShortestPath computes the shortest distance (hop count) between two nodes
-// in an unweighted graph. Returns -1 if no path exists.
 func ShortestPath(graph map[string][]string, source, target string) int {
-	// TODO: Implement BFS shortest path
-	// 1. Use breadth-first search starting from source
-	// 2. Track visited nodes and current depth
-	// 3. Return the depth when target is found
-	// 4. Return -1 if the queue is exhausted without finding target
+	if source == target {
+		return 0
+	}
+	type item struct {
+		node string
+		dist int
+	}
+	visited := map[string]bool{source: true}
+	queue := []item{{source, 0}}
+	for len(queue) > 0 {
+		curr := queue[0]
+		queue = queue[1:]
+		for _, neighbor := range graph[curr.node] {
+			if neighbor == target {
+				return curr.dist + 1
+			}
+			if !visited[neighbor] {
+				visited[neighbor] = true
+				queue = append(queue, item{neighbor, curr.dist + 1})
+			}
+		}
+	}
 	return -1
 }
 
-// RunDistance executes the "distance" subcommand: loads a GeoJSON file,
-// builds a graph, and computes the shortest path between two bus IDs.
 func RunDistance(inputFile, sourceNode, targetNode string) {
 	collection := LoadGeoJSON(inputFile)
 	graph := BuildGraph(collection)
