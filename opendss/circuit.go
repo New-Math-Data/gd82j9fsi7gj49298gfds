@@ -68,8 +68,9 @@ func (c *Circuit) ToGeoJSON() *geojson.FeatureCollection {
 	busFeatures := make([]*geojson.Feature, 0, len(c.buses))
 	busFeatureMap := make(map[BusID]*geojson.Feature, len(c.buses))
 	for _, b := range c.buses {
-		busFeatures = append(busFeatures, b.ToGeoJSONFeature())
-		busFeatureMap[b.ID] = busFeatures[len(busFeatures)-1]
+		f := b.ToGeoJSONFeature()
+		busFeatures = append(busFeatures, f)
+		busFeatureMap[b.ID] = f
 	}
 
 	// Enrich the lines with their connected busses.
@@ -81,9 +82,12 @@ func (c *Circuit) ToGeoJSON() *geojson.FeatureCollection {
 		bus1ID := BusID(lineFeatures[i].Properties.ConnectedAssets.Sources[0])
 		bus2ID := BusID(lineFeatures[i].Properties.ConnectedAssets.Targets[0])
 		lineID := lineFeatures[i].Properties.ID
+
+		// bus1 is the source of this line — the line is an outgoing connection from bus1
 		if bf, ok := busFeatureMap[bus1ID]; ok {
 			bf.Properties.ConnectedAssets.Targets = append(bf.Properties.ConnectedAssets.Targets, lineID)
 		}
+		// bus2 is the target of this line — the line is an incoming connection to bus2
 		if bf, ok := busFeatureMap[bus2ID]; ok {
 			bf.Properties.ConnectedAssets.Sources = append(bf.Properties.ConnectedAssets.Sources, lineID)
 		}
@@ -97,6 +101,8 @@ func (c *Circuit) ToGeoJSON() *geojson.FeatureCollection {
 		vsourceFeatures[i] = v.ToGeoJSONFeature(c.buses)
 		bus1ID := BusID(vsourceFeatures[i].Properties.ConnectedAssets.Targets[0])
 		vsrcID := vsourceFeatures[i].Properties.ID
+
+		// ...and enrich the bus with its Vsource
 		if bf, ok := busFeatureMap[bus1ID]; ok {
 			bf.Properties.ConnectedAssets.Sources = append(bf.Properties.ConnectedAssets.Sources, vsrcID)
 		}
@@ -104,7 +110,7 @@ func (c *Circuit) ToGeoJSON() *geojson.FeatureCollection {
 
 	// ...and the geojson file is just a giant assemblage of all the individial
 	// elements (busses, lines, and vsources) enriched with their connectivity.
-	var features []*geojson.Feature
+	features := make([]*geojson.Feature, 0, len(busFeatures)+len(lineFeatures)+len(vsourceFeatures))
 	features = append(features, busFeatures...)
 	features = append(features, lineFeatures...)
 	features = append(features, vsourceFeatures...)

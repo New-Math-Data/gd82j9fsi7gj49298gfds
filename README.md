@@ -325,3 +325,19 @@ Please submit:
 - [`regexp`](https://pkg.go.dev/regexp) -- Regular expressions (standard library)
 
 No external dependencies are required for this assessment.
+
+---
+
+## Evaluation
+
+How to navigate what I built:
+
+- `scripts/run.sh` provides numerous runs of the app showing its output.
+- `results/output.json` contains OpenDSS converted to GeoJSON.
+- `results/distance.txt` contains the output of `scripts/run.sh` showing distancs calcs and some expected error cases.
+- `results/claude.transcript` contains a lo-fi transcript of my conversation with Claude, which I used to write most of this.
+- `make run` builds an executable and runs `scripts/run.sh`
+
+**Note**: Did I go overboard? Maybe, but AI tools like Claude make it easy and fast to churn out test cases and productionalize (linting, Makefile, CI, etc.) code.
+As an engineer, it's important that you know how to guide it to create a good architecture, ensure the core test cases are truly covered and correct, and to
+check the core parts of the code (like the BFS) to ensure they accomplish what you want and they don't do things like infinite loop or memory exhaustion.

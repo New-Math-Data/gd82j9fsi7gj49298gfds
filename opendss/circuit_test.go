@@ -143,4 +143,5 @@ func TestToGeoJSON(t *testing.T) {
 	assert.Equal(t, []string{"POWERFLOW"}, tyn201Bus.Properties.GlossaryTerms)
 	assert.Contains(t, tyn201Bus.Properties.ConnectedAssets.Sources, "Vsource.source")
 	assert.Contains(t, tyn201Bus.Properties.ConnectedAssets.Targets, "Line.tyn201_feeder")
+
 }

@@ -1,0 +1,88 @@
+--- happy path ---
+
+# expected: distance 0 (same node)
+Shortest path from tyn201 to tyn201: 0  (wallclock time: 0s)
+
+# expected: distance 1 (adjacent via Line.tyn201_feeder)
+Shortest path from tyn201 to 1147583: 1  (wallclock time: 0s)
+
+# expected: distance 2 (README example)
+Shortest path from tyn201 to 64925: 2  (wallclock time: 0s)
+
+# expected: distance 1 (same edge, opposite direction)
+Shortest path from 1147583 to 64925: 1  (wallclock time: 0s)
+
+# expected: distance 12 (longer path)
+Shortest path from tyn201 to 64910: 12  (wallclock time: 0s)
+
+--- error cases ---
+
+# expected: error — source node does not exist in graph
+ERROR CASE: unknown source node
+source node DOES_NOT_EXIST not found
+Error: source node DOES_NOT_EXIST not found
+Usage:
+  opendss-assessment distance [flags]
+
+Flags:
+  -h, --help                 help for distance
+      --input string         Path to the GeoJSON file to read (default "output.json")
+      --source_node string   Source bus ID (required)
+      --target_node string   Target bus ID (required)
+
+
+# expected: error — target node does not exist in graph
+ERROR CASE: unknown target node
+target node DOES_NOT_EXIST not found
+Error: target node DOES_NOT_EXIST not found
+Usage:
+  opendss-assessment distance [flags]
+
+Flags:
+  -h, --help                 help for distance
+      --input string         Path to the GeoJSON file to read (default "output.json")
+      --source_node string   Source bus ID (required)
+      --target_node string   Target bus ID (required)
+
+
+# expected: error — input GeoJSON file not found
+ERROR CASE: missing input file
+open no_such_file.json: The system cannot find the file specified.
+Error: open no_such_file.json: The system cannot find the file specified.
+Usage:
+  opendss-assessment distance [flags]
+
+Flags:
+  -h, --help                 help for distance
+      --input string         Path to the GeoJSON file to read (default "output.json")
+      --source_node string   Source bus ID (required)
+      --target_node string   Target bus ID (required)
+
+
+# expected: error — required flag source_node missing
+ERROR CASE: missing --source_node flag
+required flag(s) "source_node" not set
+Error: required flag(s) "source_node" not set
+Usage:
+  opendss-assessment distance [flags]
+
+Flags:
+  -h, --help                 help for distance
+      --input string         Path to the GeoJSON file to read (default "output.json")
+      --source_node string   Source bus ID (required)
+      --target_node string   Target bus ID (required)
+
+
+# expected: error — circuit_model flag missing from convert
+ERROR CASE: missing --circuit_model flag
+required flag(s) "circuit_model" not set
+Error: required flag(s) "circuit_model" not set
+Usage:
+  opendss-assessment convert [flags]
+
+Flags:
+      --bus_coords string      Path to the bus coordinates file (required)
+      --circuit_model string   Path to the circuit model file (required)
+  -h, --help                   help for convert
+      --output string          Path to the output GeoJSON file (default "output.json")
+

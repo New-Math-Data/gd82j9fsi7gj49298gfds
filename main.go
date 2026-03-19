@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -56,6 +57,7 @@ func RunConvert(circuitModel, busCoords, outputFile string) error {
 }
 
 func RunDistance(inputFile, sourceNodeID, targetNodeID string) error {
+
 	collection, err := geojson.LoadGeoJSON(inputFile)
 	if err != nil {
 		return err
@@ -72,8 +74,12 @@ func RunDistance(inputFile, sourceNodeID, targetNodeID string) error {
 		return fmt.Errorf("target node %s not found", targetNodeID)
 	}
 
+	start := time.Now()
 	distance := g.ShortestPath(sourceNode, targetNode)
-	fmt.Printf("Shortest path from %s to %s: %d\n", sourceNodeID, targetNodeID, distance)
+	duration := time.Since(start).Round(time.Microsecond)
+
+	fmt.Printf("Shortest path from %s to %s: %d  (wallclock time: %s)\n",
+		sourceNodeID, targetNodeID, distance, duration)
 	return nil
 }
 

@@ -1,7 +1,11 @@
-.PHONY: build test lint fmt vet clean
+.PHONY: build test lint fmt vet clean run
 
 build:
-	go build -o opendss-assessment .
+	-mkdir -p bin
+	go build -o bin/opendss-assessment .
+
+run: build
+	bash scripts/run.sh
 
 test:
 	go test ./...
@@ -16,4 +20,4 @@ vet:
 	go vet ./...
 
 clean:
-	rm -f opendss-assessment
+	-rm -rf bin
