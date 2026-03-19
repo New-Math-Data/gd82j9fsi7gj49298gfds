@@ -223,3 +223,21 @@
 [User] Update the transcript.
 
 [Claude] Appended all exchanges since last update to results/claude.transcript.
+
+[User] For bus, line, and vsource, make builders in their respective files instead of hardcoded parsing in circuit. The builders should take a line from the input file and circuit is just responsible for feeding the line.
+
+[Claude] Added NewBusFromCSV(row []string) *Bus to bus.go, NewLineFromOpenDSS(rawLine string) *Line to line.go, NewVsourceFromOpenDSS(rawLine string) *Vsource to vsource.go. Circuit.LoadBusCoords and LoadCircuitModel reduced to iteration loops delegating to these constructors. parseSpecs moved to circuit.go as a shared unexported helper.
+
+[User] And ensure you add tests for parsing actual known lines from the file into these structs.
+
+[Claude] Added TestNewBus, TestNewBusShortRow (bus.go), TestNewLine, TestNewLineRejectsNonLine (line.go), TestNewVsource, TestNewVsourceRejectsNonVsource (vsource.go) using verbatim lines from data/master.dss and data/busGISCoords.csv. All pass.
+
+[User] The highlighted logic should be abstracted out into a function called by both Vsource and Line to extract its canonical ID.
+
+[Claude] Extracted parseOpenDSSElement(rawLine, typeName string) (id string, specTokens []string, ok bool) to circuit.go. Validates keyword (New/Edit), checks type prefix, splits ID. NewLineFromOpenDSS and NewVsourceFromOpenDSS both delegate to it.
+
+[User] Break up the tests in opendss into different files for each struct they center around.
+
+[Claude] Split opendss_test.go into bus_test.go (NewBusFromCSV, NewBusID, LoadBusCoords), line_test.go (NewLine, NewLineRejectsNonLine), vsource_test.go (NewVsource, NewVsourceRejectsNonVsource), circuit_test.go (parseSpecs, LoadCircuitModel, ToGeoJSON). Deleted opendss_test.go. All tests pass.
+
+[User] Update claude transcript.
