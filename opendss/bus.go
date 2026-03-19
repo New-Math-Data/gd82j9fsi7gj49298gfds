@@ -27,8 +27,8 @@ type Bus struct {
 	Lon float64
 }
 
-func (b *Bus) ToFeature() geojson.Feature {
-	return geojson.Feature{
+func (b *Bus) ToFeature() *geojson.Feature {
+	return &geojson.Feature{
 		Type:     "Feature",
 		Geometry: geojson.Geometry(geojson.NewPoint(b.Lon, b.Lat)),
 		Properties: geojson.Properties{

@@ -13,7 +13,7 @@ func TestLoadGeoJSON(t *testing.T) {
 	// Tests loading one of every type of object: Line, Bus, Vsource
 	marshalled := &GeoJSONFeatureCollection{
 		Type: "FeatureCollection",
-		Features: []Feature{
+		Features: []*Feature{
 			{
 				Type:     "Feature",
 				Geometry: Geometry{Type: "Point", Coordinates: json.RawMessage(`[-85.1481,35.05225]`)},
@@ -259,7 +259,7 @@ func TestLoadGeoJSONEmptyFeatures(t *testing.T) {
 func TestBuildGraphUndirected(t *testing.T) {
 	collection := GeoJSONFeatureCollection{
 		Type: "FeatureCollection",
-		Features: []Feature{
+		Features: []*Feature{
 			{
 				Type:     "Feature",
 				Geometry: Geometry{Type: "LineString"},

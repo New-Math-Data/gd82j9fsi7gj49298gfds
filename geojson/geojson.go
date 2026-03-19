@@ -6,11 +6,11 @@ import (
 )
 
 type GeoJSONFeatureCollection struct { //nolint:revive // GeoJSONFeatureCollection is simply the defined name, even though it stutters
-	Type     string    `json:"type"`
-	Features []Feature `json:"features"`
+	Type     string     `json:"type"`
+	Features []*Feature `json:"features"`
 }
 
-func NewGeoJSONFeatureCollection(features []Feature) *GeoJSONFeatureCollection {
+func NewGeoJSONFeatureCollection(features []*Feature) *GeoJSONFeatureCollection {
 	return &GeoJSONFeatureCollection{Type: "FeatureCollection", Features: features}
 }
 

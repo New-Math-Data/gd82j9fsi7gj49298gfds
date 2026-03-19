@@ -17,17 +17,6 @@ type Graph struct {
 	adj   map[NodeID][]*Node
 }
 
-func NewGraph(nodes []*Node, edges []*Edge) *Graph {
-	nodeMap := make(map[NodeID]*Node, len(nodes))
-	for _, n := range nodes {
-		nodeMap[n.ID] = n
-	}
-	adj := make(map[NodeID][]*Node, len(nodes))
-	for _, e := range edges {
-		adj[e.From.ID] = append(adj[e.From.ID], e.To)
-	}
-	return &Graph{nodes: nodeMap, edges: edges, adj: adj}
-}
 
 func (g *Graph) Nodes() []*Node {
 	nodes := make([]*Node, 0, len(g.nodes))

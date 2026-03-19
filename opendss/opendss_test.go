@@ -83,14 +83,14 @@ func TestToGeoJSON(t *testing.T) {
 	collection := c.ToGeoJSON()
 
 	var feeder, tyn201Bus, vsrcFeature *geojson.Feature
-	for i := range collection.Features {
-		switch collection.Features[i].Properties.ID {
+	for _, f := range collection.Features {
+		switch f.Properties.ID {
 		case "Line.tyn201_feeder":
-			feeder = &collection.Features[i]
+			feeder = f
 		case "tyn201":
-			tyn201Bus = &collection.Features[i]
+			tyn201Bus = f
 		case "Vsource.source":
-			vsrcFeature = &collection.Features[i]
+			vsrcFeature = f
 		}
 	}
 

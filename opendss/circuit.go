@@ -89,14 +89,14 @@ func (c *Circuit) LoadCircuitModel(filePath string) error {
 }
 
 func (c *Circuit) ToGeoJSON() *geojson.GeoJSONFeatureCollection {
-	busFeatures := make([]geojson.Feature, 0, len(c.busIndex))
+	busFeatures := make([]*geojson.Feature, 0, len(c.busIndex))
 	busFeatureMap := make(map[BusID]*geojson.Feature, len(c.busIndex))
 	for _, b := range c.busIndex {
 		busFeatures = append(busFeatures, b.ToFeature())
-		busFeatureMap[b.ID] = &busFeatures[len(busFeatures)-1]
+		busFeatureMap[b.ID] = busFeatures[len(busFeatures)-1]
 	}
 
-	lineFeatures := make([]geojson.Feature, len(c.lines))
+	lineFeatures := make([]*geojson.Feature, len(c.lines))
 	for i, l := range c.lines {
 		lineFeatures[i] = l.ToFeature(c.busIndex)
 		bus1ID := BusID(lineFeatures[i].Properties.ConnectedAssets.Sources[0])
@@ -110,7 +110,7 @@ func (c *Circuit) ToGeoJSON() *geojson.GeoJSONFeatureCollection {
 		}
 	}
 
-	vsourceFeatures := make([]geojson.Feature, len(c.vsources))
+	vsourceFeatures := make([]*geojson.Feature, len(c.vsources))
 	for i, v := range c.vsources {
 		vsourceFeatures[i] = v.ToFeature(c.busIndex)
 		bus1ID := BusID(vsourceFeatures[i].Properties.ConnectedAssets.Targets[0])
@@ -120,7 +120,7 @@ func (c *Circuit) ToGeoJSON() *geojson.GeoJSONFeatureCollection {
 		}
 	}
 
-	var features []geojson.Feature
+	var features []*geojson.Feature
 	features = append(features, busFeatures...)
 	features = append(features, lineFeatures...)
 	features = append(features, vsourceFeatures...)

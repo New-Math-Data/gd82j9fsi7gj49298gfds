@@ -7,7 +7,7 @@ type Line struct {
 	Specs Specs
 }
 
-func (l *Line) ToFeature(busIndex map[BusID]*Bus) geojson.Feature {
+func (l *Line) ToFeature(busIndex map[BusID]*Bus) *geojson.Feature {
 	bus1ID := NewBusID(l.Specs.String("bus1"))
 	bus2ID := NewBusID(l.Specs.String("bus2"))
 
@@ -20,7 +20,7 @@ func (l *Line) ToFeature(busIndex map[BusID]*Bus) geojson.Feature {
 	}
 
 	id := "Line." + l.ID
-	return geojson.Feature{
+	return &geojson.Feature{
 		Type:     "Feature",
 		Geometry: geom,
 		Properties: geojson.Properties{

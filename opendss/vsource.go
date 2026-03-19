@@ -7,7 +7,7 @@ type Vsource struct {
 	Specs Specs
 }
 
-func (v *Vsource) ToFeature(busIndex map[BusID]*Bus) geojson.Feature {
+func (v *Vsource) ToFeature(busIndex map[BusID]*Bus) *geojson.Feature {
 	bus1ID := NewBusID(v.Specs.String("bus1"))
 
 	var geom geojson.Geometry
@@ -16,7 +16,7 @@ func (v *Vsource) ToFeature(busIndex map[BusID]*Bus) geojson.Feature {
 	}
 
 	id := "Vsource." + v.ID
-	return geojson.Feature{
+	return &geojson.Feature{
 		Type:     "Feature",
 		Geometry: geom,
 		Properties: geojson.Properties{
