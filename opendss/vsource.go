@@ -4,14 +4,28 @@ import "opendss-assessment/geojson"
 
 type Vsource struct {
 	ID    string
-	Bus1  BusID
+	BusID BusID
 	Specs Specs
+}
+
+// Converts a single Vsource from OpenDSS file into Vsource struct
+func NewVsourceFromOpenDSS(rawLine string) *Vsource {
+	id, specTokens, ok := parseOpenDSSElement(rawLine, "Vsource")
+	if !ok {
+		return nil
+	}
+	specs := parseSpecs(specTokens)
+	return &Vsource{
+		ID:    id,
+		BusID: NewBusID(specs.String("bus1")),
+		Specs: specs,
+	}
 }
 
 // Convert Vsource from OpenDSS to GeoJSON.
 func (v *Vsource) ToFeature(busIndex map[BusID]*Bus) *geojson.Feature {
 	var geom geojson.Geometry
-	if b, ok := busIndex[v.Bus1]; ok {
+	if b, ok := busIndex[v.BusID]; ok {
 		geom = geojson.Geometry(*geojson.NewPoint(b.Lon, b.Lat))
 	}
 
@@ -22,6 +36,6 @@ func (v *Vsource) ToFeature(busIndex map[BusID]*Bus) *geojson.Feature {
 		AssetType:       "Vsource",
 		Specifications:  v.Specs,
 		GlossaryTerms:   []string{"POWERFLOW"},
-		ConnectedAssets: geojson.ConnectedAssets{Sources: []string{}, Targets: []string{string(v.Bus1)}},
+		ConnectedAssets: geojson.ConnectedAssets{Sources: []string{}, Targets: []string{string(v.BusID)}},
 	})
 }

@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"encoding/csv"
 	"os"
-	"strconv"
 	"strings"
 
 	"opendss-assessment/geojson"
 )
 
+// Specs is just an arbitrary jsonserializable JSON object.
+// We need it to project arbitrary OpenDSS properties into GeoJSON properties.
 type Specs map[string]interface{}
 
 func (s Specs) String(key string) string {
@@ -17,16 +18,15 @@ func (s Specs) String(key string) string {
 	return v
 }
 
-// Circuit is what I'm calling the overall model for what's in the OpenDSS file
-// because the OpenDSS file describes an interconnected set of voltage sources.
+// Circuit is the overall model for what's in the OpenDSS file.
 type Circuit struct {
 	lines    []*Line
 	vsources []*Vsource
-	busIndex map[BusID]*Bus
+	buses    map[BusID]*Bus
 }
 
 func NewCircuit() *Circuit {
-	return &Circuit{busIndex: make(map[BusID]*Bus)}
+	return &Circuit{buses: make(map[BusID]*Bus)}
 }
 
 // Loads a csv file decorating busses with lat/lon.
@@ -40,13 +40,9 @@ func (c *Circuit) LoadBusCoords(filePath string) error {
 		return err
 	}
 	for _, row := range records {
-		if len(row) < 3 {
-			continue
+		if b := NewBusFromCSV(row); b != nil {
+			c.buses[b.ID] = b
 		}
-		id := BusID(strings.TrimSpace(row[0]))
-		lat, _ := strconv.ParseFloat(strings.TrimSpace(row[1]), 64)
-		lon, _ := strconv.ParseFloat(strings.TrimSpace(row[2]), 64)
-		c.busIndex[id] = &Bus{ID: id, Lat: lat, Lon: lon}
 	}
 	return nil
 }
@@ -58,43 +54,13 @@ func (c *Circuit) LoadCircuitModel(filePath string) error {
 		return err
 	}
 
-	// Each line is a new entry; a newline might be linux (\n) or windows (\r\n)
-	lines := strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n")
-
-	for _, rawLine := range lines {
-		// Clean up
-		rawLine = strings.TrimSpace(rawLine)
-		if rawLine == "" {
-			continue
-		}
-
-		// Valid line?
-		tokens := strings.Fields(rawLine)
-		if len(tokens) < 2 {
-			continue
-		}
-
-		isLine := tokens[0] == "New" && strings.HasPrefix(tokens[1], "\"Line.")
-		isVsource := strings.Contains(tokens[1], "\"Vsource.")
-
-		// Only interested in lines and vsources.
-		if !isLine && !isVsource {
-			continue
-		}
-
-		fullID := strings.Trim(tokens[1], "\"")
-		parts := strings.SplitN(fullID, ".", 2)
-		id := ""
-		if len(parts) == 2 {
-			id = parts[1]
-		}
-
-		specs := parseSpecs(tokens[2:])
-
-		if isLine {
-			c.lines = append(c.lines, &Line{ID: id, Bus1: NewBusID(specs.String("bus1")), Bus2: NewBusID(specs.String("bus2")), Specs: specs})
-		} else {
-			c.vsources = append(c.vsources, &Vsource{ID: id, Bus1: NewBusID(specs.String("bus1")), Specs: specs})
+	// Splitting for both windows and unix newlines.
+	for _, rawLine := range strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n") {
+		// Only interested in Lines and VSources.
+		if l := NewLineFromOpenDSS(rawLine); l != nil {
+			c.lines = append(c.lines, l)
+		} else if v := NewVsourceFromOpenDSS(rawLine); v != nil {
+			c.vsources = append(c.vsources, v)
 		}
 	}
 	return nil
@@ -102,10 +68,14 @@ func (c *Circuit) LoadCircuitModel(filePath string) error {
 
 // Converts the whole Circuit to a giant GeoJSON.
 func (c *Circuit) ToGeoJSON() *geojson.FeatureCollection {
-
-	busFeatures := make([]*geojson.Feature, 0, len(c.busIndex))
-	busFeatureMap := make(map[BusID]*geojson.Feature, len(c.busIndex))
-	for _, b := range c.busIndex {
+	// Convert the buses into their full form in preparation for
+	// appending the lines and vsources connected to them. Storing
+	// this in a map allows us O(1) lookups as we iterate over the
+	// lines and vsources. We keep a copy in an array because we
+	// need to flatten this all at the end to write to the GeoJSON.
+	busFeatures := make([]*geojson.Feature, 0, len(c.buses))
+	busFeatureMap := make(map[BusID]*geojson.Feature, len(c.buses))
+	for _, b := range c.buses {
 		busFeatures = append(busFeatures, b.ToFeature())
 		busFeatureMap[b.ID] = busFeatures[len(busFeatures)-1]
 	}
@@ -115,7 +85,7 @@ func (c *Circuit) ToGeoJSON() *geojson.FeatureCollection {
 	// and we are iterating linearly over the lines, so this remains O(n).
 	lineFeatures := make([]*geojson.Feature, len(c.lines))
 	for i, l := range c.lines {
-		lineFeatures[i] = l.ToFeature(c.busIndex)
+		lineFeatures[i] = l.ToFeature(c.buses)
 		bus1ID := BusID(lineFeatures[i].Properties.ConnectedAssets.Sources[0])
 		bus2ID := BusID(lineFeatures[i].Properties.ConnectedAssets.Targets[0])
 		lineID := lineFeatures[i].Properties.ID
@@ -132,7 +102,7 @@ func (c *Circuit) ToGeoJSON() *geojson.FeatureCollection {
 	// a hashmap with O(1) lookups to get the bus.
 	vsourceFeatures := make([]*geojson.Feature, len(c.vsources))
 	for i, v := range c.vsources {
-		vsourceFeatures[i] = v.ToFeature(c.busIndex)
+		vsourceFeatures[i] = v.ToFeature(c.buses)
 		bus1ID := BusID(vsourceFeatures[i].Properties.ConnectedAssets.Targets[0])
 		vsrcID := vsourceFeatures[i].Properties.ID
 		if bf, ok := busFeatureMap[bus1ID]; ok {
@@ -148,6 +118,27 @@ func (c *Circuit) ToGeoJSON() *geojson.FeatureCollection {
 	features = append(features, vsourceFeatures...)
 
 	return geojson.NewFeatureCollection(features)
+}
+
+// Parses a raw OpenDSS line of a given type (e.g. "Line", "Vsource"), returning
+// the element's ID and the remaining spec tokens. Returns ok=false if the line
+// is not a New/Edit statement for that type.
+func parseOpenDSSElement(rawLine, typeName string) (id string, specTokens []string, ok bool) {
+	tokens := strings.Fields(rawLine)
+	if len(tokens) < 2 {
+		return "", nil, false
+	}
+	if tokens[0] != "New" && tokens[0] != "Edit" {
+		return "", nil, false
+	}
+	if !strings.HasPrefix(tokens[1], "\""+typeName+".") {
+		return "", nil, false
+	}
+	parts := strings.SplitN(strings.Trim(tokens[1], "\""), ".", 2)
+	if len(parts) != 2 {
+		return "", nil, false
+	}
+	return parts[1], tokens[2:], true
 }
 
 // Pulls out the raw key/value pairs from OpenDSS that may be in various

@@ -215,3 +215,11 @@
 [User] Update the claude transcript.
 
 [Claude] Appended all exchanges since last update to results/claude.transcript.
+
+[User] Remove results/README.md — explanations will go in the PR description instead.
+
+[Claude] Deleted results/README.md.
+
+[User] Update the transcript.
+
+[Claude] Appended all exchanges since last update to results/claude.transcript.

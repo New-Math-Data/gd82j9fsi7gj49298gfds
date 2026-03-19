@@ -15,7 +15,7 @@ type Edge struct {
 type Graph struct {
 	nodes map[NodeID]*Node
 	edges []*Edge
-	adj   map[NodeID][]*Node
+	adj   map[NodeID][]*Node // Adjacency map allows O(1) lookups of a given node to its connected nodes
 }
 
 func (g *Graph) Edges() []*Edge {

@@ -9,6 +9,47 @@ import (
 	"opendss-assessment/geojson"
 )
 
+func TestNewBus(t *testing.T) {
+	b := NewBusFromCSV([]string{"tyn201", "35.05225", "-85.1481"})
+	require.NotNil(t, b)
+	assert.Equal(t, BusID("tyn201"), b.ID)
+	assert.Equal(t, 35.05225, b.Lat)
+	assert.Equal(t, -85.1481, b.Lon)
+}
+
+func TestNewBusShortRow(t *testing.T) {
+	assert.Nil(t, NewBusFromCSV([]string{"tyn201", "35.05225"}))
+}
+
+func TestNewLine(t *testing.T) {
+	raw := `New "Line.bon203_74056usd" phases=3 bus1=108687_1s.1.2.3 bus2=74056.1.2.3 length=1.524 units=m spacing=3PH_HORIZ_LG_1C_3 wires="BUSBAR BUSBAR BUSBAR BUSBAR" Seasons=1 Ratings=[400,] normamps=2000 emergamps=2000`
+	l := NewLineFromOpenDSS(raw)
+	require.NotNil(t, l)
+	assert.Equal(t, "bon203_74056usd", l.ID)
+	assert.Equal(t, BusID("108687"), l.BusID1)
+	assert.Equal(t, BusID("74056"), l.BusID2)
+	assert.Equal(t, "3", l.Specs.String("phases"))
+}
+
+func TestNewLineRejectsNonLine(t *testing.T) {
+	assert.Nil(t, NewLineFromOpenDSS(`New "Transformer.foo" phases=3`))
+	assert.Nil(t, NewLineFromOpenDSS(""))
+}
+
+func TestNewVsource(t *testing.T) {
+	raw := `Edit "Vsource.source" bus1=tyn201 basekv=12.47 pu=1.00000001989 angle=0.000000 Z1=[0.141506, 1.399508] Z0=[0.054425, 1.088506]`
+	v := NewVsourceFromOpenDSS(raw)
+	require.NotNil(t, v)
+	assert.Equal(t, "source", v.ID)
+	assert.Equal(t, BusID("tyn201"), v.BusID)
+	assert.Equal(t, "12.47", v.Specs.String("basekv"))
+}
+
+func TestNewVsourceRejectsNonVsource(t *testing.T) {
+	assert.Nil(t, NewVsourceFromOpenDSS(`New "Line.foo" bus1=x`))
+	assert.Nil(t, NewVsourceFromOpenDSS(""))
+}
+
 func TestNewBusID(t *testing.T) {
 	cases := []struct {
 		input string
@@ -42,9 +83,9 @@ func TestParseSpecsBracketArrayTokens(t *testing.T) {
 func TestLoadBusCoords(t *testing.T) {
 	c := NewCircuit()
 	require.NoError(t, c.LoadBusCoords("../data/busGISCoords.csv"))
-	assert.NotEmpty(t, c.busIndex)
+	assert.NotEmpty(t, c.buses)
 
-	b, ok := c.busIndex[BusID("tyn201")]
+	b, ok := c.buses[BusID("tyn201")]
 	require.True(t, ok, "tyn201 not found in busIndex")
 	assert.Equal(t, 35.05225, b.Lat)
 	assert.Equal(t, -85.1481, b.Lon)

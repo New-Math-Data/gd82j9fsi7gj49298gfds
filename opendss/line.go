@@ -3,16 +3,31 @@ package opendss
 import "opendss-assessment/geojson"
 
 type Line struct {
-	ID    string
-	Bus1  BusID
-	Bus2  BusID
-	Specs Specs
+	ID     string
+	BusID1 BusID
+	BusID2 BusID
+	Specs  Specs
+}
+
+// Converts a single line from OpenDSS file into Line struct
+func NewLineFromOpenDSS(rawLine string) *Line {
+	id, specTokens, ok := parseOpenDSSElement(rawLine, "Line")
+	if !ok {
+		return nil
+	}
+	specs := parseSpecs(specTokens)
+	return &Line{
+		ID:     id,
+		BusID1: NewBusID(specs.String("bus1")),
+		BusID2: NewBusID(specs.String("bus2")),
+		Specs:  specs,
+	}
 }
 
 // Convert Line from OpenDSS to GeoJSON.
 func (l *Line) ToFeature(busIndex map[BusID]*Bus) *geojson.Feature {
-	b1, ok1 := busIndex[l.Bus1]
-	b2, ok2 := busIndex[l.Bus2]
+	b1, ok1 := busIndex[l.BusID1]
+	b2, ok2 := busIndex[l.BusID2]
 
 	var geom geojson.Geometry
 	if ok1 && ok2 {
@@ -26,6 +41,6 @@ func (l *Line) ToFeature(busIndex map[BusID]*Bus) *geojson.Feature {
 		AssetType:       "Line",
 		Specifications:  l.Specs,
 		GlossaryTerms:   []string{},
-		ConnectedAssets: geojson.ConnectedAssets{Sources: []string{string(l.Bus1)}, Targets: []string{string(l.Bus2)}},
+		ConnectedAssets: geojson.ConnectedAssets{Sources: []string{string(l.BusID1)}, Targets: []string{string(l.BusID2)}},
 	})
 }

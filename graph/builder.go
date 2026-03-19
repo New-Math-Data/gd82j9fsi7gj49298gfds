@@ -22,9 +22,11 @@ func (b *Builder) AddNode(id NodeID) *Node {
 	return n
 }
 
+// No source/target or to/from. This is an undirected graph, so two nodes are just connected.
 func (b *Builder) ConnectNodes(an, bn *Node) *Edge {
 	e := &Edge{A: an, B: bn}
 	b.g.edges = append(b.g.edges, e)
+	// Build the adjacentcy index as we add connections.
 	b.g.adj[an.ID] = append(b.g.adj[an.ID], bn)
 	b.g.adj[bn.ID] = append(b.g.adj[bn.ID], an)
 	return e

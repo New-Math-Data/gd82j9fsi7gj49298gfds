@@ -1,6 +1,7 @@
 package opendss
 
 import (
+	"strconv"
 	"strings"
 
 	"opendss-assessment/geojson"
@@ -22,6 +23,16 @@ type Bus struct {
 	ID  BusID
 	Lat float64
 	Lon float64
+}
+
+func NewBusFromCSV(row []string) *Bus {
+	if len(row) < 3 {
+		return nil
+	}
+	id := NewBusID(strings.TrimSpace(row[0]))
+	lat, _ := strconv.ParseFloat(strings.TrimSpace(row[1]), 64)
+	lon, _ := strconv.ParseFloat(strings.TrimSpace(row[2]), 64)
+	return &Bus{ID: id, Lat: lat, Lon: lon}
 }
 
 // Convert Bus from OpenDSS to GeoJSON.
