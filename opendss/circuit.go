@@ -68,7 +68,7 @@ func (c *Circuit) ToGeoJSON() *geojson.FeatureCollection {
 	busFeatures := make([]*geojson.Feature, 0, len(c.buses))
 	busFeatureMap := make(map[BusID]*geojson.Feature, len(c.buses))
 	for _, b := range c.buses {
-		busFeatures = append(busFeatures, b.ToGeoJsonFeature())
+		busFeatures = append(busFeatures, b.ToGeoJSONFeature())
 		busFeatureMap[b.ID] = busFeatures[len(busFeatures)-1]
 	}
 

@@ -16,4 +16,4 @@ vet:
 	go vet ./...
 
 clean:
-	rm -f opendss-assessment opendss-assessment.exe
+	rm -f opendss-assessment

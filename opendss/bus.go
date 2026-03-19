@@ -36,7 +36,7 @@ func NewBusFromCSV(row []string) *Bus {
 }
 
 // Convert Bus from OpenDSS to GeoJSON.
-func (b *Bus) ToGeoJsonFeature() *geojson.Feature {
+func (b *Bus) ToGeoJSONFeature() *geojson.Feature {
 	geom := geojson.Geometry(*geojson.NewPoint(b.Lon, b.Lat))
 	return geojson.NewFeature(&geom, &geojson.Properties{
 		ID:              string(b.ID),

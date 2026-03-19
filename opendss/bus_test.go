@@ -50,7 +50,7 @@ func TestOpenDSSBusToGeoJSONBus(t *testing.T) {
 	b := NewBusFromCSV([]string{"tyn201", "35.05225", "-85.1481"})
 	require.NotNil(t, b)
 
-	f := b.ToGeoJsonFeature()
+	f := b.ToGeoJSONFeature()
 	require.NotNil(t, f)
 
 	assert.Equal(t, "Feature", f.Type)
