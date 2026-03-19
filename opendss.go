@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/csv"
 	"encoding/json"
-	"fmt"
 	"os"
 	"regexp"
 	"strconv"
@@ -60,16 +59,14 @@ func NewCircuit() *Circuit {
 	return &Circuit{busIndex: make(map[BusID]*Bus)}
 }
 
-func (c *Circuit) LoadBusCoords(filePath string) {
+func (c *Circuit) LoadBusCoords(filePath string) error {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error reading bus coords: %v\n", err)
-		os.Exit(1)
+		return err
 	}
 	records, err := csv.NewReader(bytes.NewReader(data)).ReadAll()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error parsing bus coords: %v\n", err)
-		os.Exit(1)
+		return err
 	}
 	for _, row := range records {
 		if len(row) < 3 {
@@ -82,13 +79,13 @@ func (c *Circuit) LoadBusCoords(filePath string) {
 		c.buses = append(c.buses, b)
 		c.busIndex[id] = b
 	}
+	return nil
 }
 
-func (c *Circuit) LoadCircuitModel(filePath string) {
+func (c *Circuit) LoadCircuitModel(filePath string) error {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error reading circuit model: %v\n", err)
-		os.Exit(1)
+		return err
 	}
 	for _, rawLine := range splitLines(string(data)) {
 		rawLine = strings.TrimSpace(rawLine)
@@ -122,6 +119,7 @@ func (c *Circuit) LoadCircuitModel(filePath string) {
 			c.vsources = append(c.vsources, &Vsource{ID: id, Specs: specs})
 		}
 	}
+	return nil
 }
 
 func (b *Bus) ToFeature() Feature {
@@ -188,7 +186,7 @@ func (v *Vsource) ToFeature(busIndex map[BusID]*Bus) Feature {
 	}
 }
 
-func (c *Circuit) ToGeoJSON() GeoJSONFeatureCollection {
+func (c *Circuit) ToGeoJSON() *GeoJSONFeatureCollection {
 	busFeatures := make([]Feature, len(c.buses))
 	busFeatureMap := make(map[BusID]*Feature)
 	for i, b := range c.buses {
@@ -225,7 +223,7 @@ func (c *Circuit) ToGeoJSON() GeoJSONFeatureCollection {
 	features = append(features, lineFeatures...)
 	features = append(features, vsourceFeatures...)
 
-	return GeoJSONFeatureCollection{Type: "FeatureCollection", Features: features}
+	return NewGeoJSONFeatureCollection(features)
 }
 
 func splitLines(s string) []string {

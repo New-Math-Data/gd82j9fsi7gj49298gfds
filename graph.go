@@ -4,8 +4,8 @@ type Graph struct {
 	edges map[string][]string
 }
 
-func BuildGraph(collection GeoJSONFeatureCollection) Graph {
-	g := Graph{edges: make(map[string][]string)}
+func BuildGraph(collection *GeoJSONFeatureCollection) *Graph {
+	g := &Graph{edges: make(map[string][]string)}
 	for _, f := range collection.Features {
 		if f.Properties.AssetType != "Line" {
 			continue
@@ -22,7 +22,7 @@ func BuildGraph(collection GeoJSONFeatureCollection) Graph {
 	return g
 }
 
-func (g Graph) ShortestPath(source, target string) int {
+func (g *Graph) ShortestPath(source, target string) int {
 	if source == target {
 		return 0
 	}

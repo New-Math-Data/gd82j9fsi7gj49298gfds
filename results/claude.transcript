@@ -77,3 +77,19 @@
 [User] Can splitLines be dramatically simplified?
 
 [Claude] Reduced 20-line manual byte-walk to one line: strings.Split(strings.ReplaceAll(s, "\r\n", "\n"), "\n"). Empty line filtering remains at the call site in LoadCircuitModel.
+
+[User] Update claude transcript in results.
+
+[Claude] Appended all exchanges since last update to results/claude.transcript.
+
+[User] Can we parallelize the graph shortest path computation?
+
+[Claude] No — BFS is inherently sequential (each level depends on the prior) and the dataset is too small to justify the goroutine overhead. No implementation needed.
+
+[User] Error handling here is suppressed or contrived. The only system exits should be occurring in main. Have all errors bubble up.
+
+[Claude] Updated LoadBusCoords and LoadCircuitModel to return error (were discarding errors). LoadGeoJSON updated to return (*GeoJSONFeatureCollection, error). RunConvert and RunDistance updated to return error; cobra Run changed to RunE so cobra prints errors and exits cleanly. All os.Exit calls removed from RunConvert/RunDistance — only root.Execute() exits in main. Tests updated to check returned errors.
+
+[User] Many of these methods that take in and return structs should take and return pointers.
+
+[Claude] Updated BuildGraph to accept *GeoJSONFeatureCollection and return *Graph; ShortestPath receiver changed to *Graph. ToGeoJSON() now returns *GeoJSONFeatureCollection. All callers (main.go, test files) updated accordingly. All tests pass. Regenerated results/output.json.

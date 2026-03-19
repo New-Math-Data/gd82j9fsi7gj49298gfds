@@ -23,31 +23,38 @@ func normalizeDashes(args []string) []string {
 	return normalized
 }
 
-func RunConvert(circuitModel, busCoords, outputFile string) {
+func RunConvert(circuitModel, busCoords, outputFile string) error {
 	circuit := NewCircuit()
-	circuit.LoadBusCoords(busCoords)
-	circuit.LoadCircuitModel(circuitModel)
+	if err := circuit.LoadBusCoords(busCoords); err != nil {
+		return err
+	}
+	if err := circuit.LoadCircuitModel(circuitModel); err != nil {
+		return err
+	}
 	collection := circuit.ToGeoJSON()
 
 	output, err := json.MarshalIndent(collection, "", "  ")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error marshalling GeoJSON: %v\n", err)
-		os.Exit(1)
+		return err
 	}
 
 	if err := os.WriteFile(outputFile, output, 0644); err != nil {
-		fmt.Fprintf(os.Stderr, "Error writing output file: %v\n", err)
-		os.Exit(1)
+		return err
 	}
 
-	fmt.Printf("Wrote %s\n", outputFile)
+	fmt.Printf("Wrote to %s\n", outputFile)
+	return nil
 }
 
-func RunDistance(inputFile, sourceNode, targetNode string) {
-	collection := LoadGeoJSON(inputFile)
+func RunDistance(inputFile, sourceNode, targetNode string) error {
+	collection, err := LoadGeoJSON(inputFile)
+	if err != nil {
+		return err
+	}
 	graph := BuildGraph(collection)
 	distance := graph.ShortestPath(sourceNode, targetNode)
 	fmt.Printf("Shortest path from %s to %s: %d\n", sourceNode, targetNode, distance)
+	return nil
 }
 
 func main() {
@@ -60,8 +67,8 @@ func main() {
 	convertCmd := &cobra.Command{
 		Use:   "convert",
 		Short: "Convert OpenDSS data to GeoJSON",
-		Run: func(cmd *cobra.Command, args []string) {
-			RunConvert(circuitModel, busCoords, outputFile)
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return RunConvert(circuitModel, busCoords, outputFile)
 		},
 	}
 	convertCmd.Flags().StringVar(&circuitModel, "circuit_model", "", "Path to the circuit model file (required)")
@@ -74,8 +81,8 @@ func main() {
 	distanceCmd := &cobra.Command{
 		Use:   "distance",
 		Short: "Compute shortest path between two buses",
-		Run: func(cmd *cobra.Command, args []string) {
-			RunDistance(inputFile, sourceNode, targetNode)
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return RunDistance(inputFile, sourceNode, targetNode)
 		},
 	}
 	distanceCmd.Flags().StringVar(&inputFile, "input", "output.json", "Path to the GeoJSON file to read")
@@ -88,6 +95,7 @@ func main() {
 	root.SetArgs(normalizeDashes(os.Args[1:]))
 
 	if err := root.Execute(); err != nil {
+		fmt.Println(err)
 		os.Exit(1)
 	}
 }

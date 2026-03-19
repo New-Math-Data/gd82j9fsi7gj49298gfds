@@ -36,7 +36,10 @@ func TestLoadGeoJSON(t *testing.T) {
 	f.Write(data)
 	f.Close()
 
-	loaded := LoadGeoJSON(f.Name())
+	loaded, err := LoadGeoJSON(f.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
 	if loaded.Type != "FeatureCollection" {
 		t.Errorf("type = %q, want FeatureCollection", loaded.Type)
 	}

@@ -57,7 +57,7 @@ func TestBuildGraphUndirected(t *testing.T) {
 			},
 		},
 	}
-	g := BuildGraph(collection)
+	g := BuildGraph(&collection)
 	foundAB, foundBA := false, false
 	for _, n := range g.edges["A"] {
 		if n == "B" {

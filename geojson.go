@@ -2,13 +2,16 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 )
 
 type GeoJSONFeatureCollection struct {
 	Type     string    `json:"type"`
 	Features []Feature `json:"features"`
+}
+
+func NewGeoJSONFeatureCollection(features []Feature) *GeoJSONFeatureCollection {
+	return &GeoJSONFeatureCollection{Type: "FeatureCollection", Features: features}
 }
 
 type Feature struct {
@@ -36,13 +39,14 @@ type Properties struct {
 	GlossaryTerms   []string               `json:"glossary_terms"`
 }
 
-func LoadGeoJSON(filePath string) GeoJSONFeatureCollection {
+func LoadGeoJSON(filePath string) (*GeoJSONFeatureCollection, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error reading GeoJSON: %v\n", err)
-		os.Exit(1)
+		return nil, err
 	}
 	var collection GeoJSONFeatureCollection
-	json.Unmarshal(data, &collection)
-	return collection
+	if err := json.Unmarshal(data, &collection); err != nil {
+		return nil, err
+	}
+	return &collection, nil
 }

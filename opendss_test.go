@@ -47,7 +47,9 @@ func TestParseSpecsBracketArrayTokens(t *testing.T) {
 
 func TestLoadBusCoords(t *testing.T) {
 	c := NewCircuit()
-	c.LoadBusCoords("data/busGISCoords.csv")
+	if err := c.LoadBusCoords("data/busGISCoords.csv"); err != nil {
+		t.Fatal(err)
+	}
 
 	if len(c.buses) == 0 {
 		t.Fatal("expected buses, got none")
@@ -64,7 +66,9 @@ func TestLoadBusCoords(t *testing.T) {
 
 func TestLoadCircuitModel(t *testing.T) {
 	c := NewCircuit()
-	c.LoadCircuitModel("data/master.dss")
+	if err := c.LoadCircuitModel("data/master.dss"); err != nil {
+		t.Fatal(err)
+	}
 
 	if len(c.lines) == 0 {
 		t.Fatal("expected lines, got none")
@@ -101,8 +105,12 @@ func TestLoadCircuitModel(t *testing.T) {
 
 func TestToGeoJSON(t *testing.T) {
 	c := NewCircuit()
-	c.LoadBusCoords("data/busGISCoords.csv")
-	c.LoadCircuitModel("data/master.dss")
+	if err := c.LoadBusCoords("data/busGISCoords.csv"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.LoadCircuitModel("data/master.dss"); err != nil {
+		t.Fatal(err)
+	}
 	collection := c.ToGeoJSON()
 
 	var feeder, tyn201Bus, vsrcFeature *Feature
