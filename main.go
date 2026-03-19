@@ -24,19 +24,10 @@ func normalizeDashes(args []string) []string {
 }
 
 func RunConvert(circuitModel, busCoords, outputFile string) {
-	buses, busMap := ParseBusCoords(busCoords)
-	lines, vsources := ParseCircuitModel(circuitModel)
-	lines, vsources = WireConnectivity(buses, busMap, lines, vsources)
-
-	var features []Feature
-	features = append(features, buses...)
-	features = append(features, lines...)
-	features = append(features, vsources...)
-
-	collection := GeoJSONFeatureCollection{
-		Type:     "FeatureCollection",
-		Features: features,
-	}
+	circuit := NewCircuit()
+	circuit.LoadBusCoords(busCoords)
+	circuit.LoadCircuitModel(circuitModel)
+	collection := circuit.ToGeoJSON()
 
 	output, err := json.MarshalIndent(collection, "", "  ")
 	if err != nil {

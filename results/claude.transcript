@@ -45,3 +45,35 @@
 [User] Make the code more object-oriented: wrap the graph map in a Graph struct. Also break up the tests into separate files per source file (geojson_test.go, opendss_test.go, graph_test.go).
 
 [Claude] Updated graph.go: introduced Graph struct with unexported edges field; BuildGraph returns Graph; ShortestPath becomes a method (g Graph) ShortestPath(...); RunDistance in main.go updated to call graph.ShortestPath(...). Deleted main_test.go and created three test files: graph_test.go (ShortestPath and BuildGraph tests, constructing Graph{edges: ...} directly since tests are in the same package), opendss_test.go (normalizeBusID, parseSpecs, ParseBusCoords, ParseCircuitModel, WireConnectivity), geojson_test.go (LoadGeoJSON round-trip via temp file). All 11 tests pass.
+
+[User] opendss is too hard-coded — give it its own struct with internal typed representation of Bus, Line, Vsource.
+
+[Claude] Introduced Bus, Line, Vsource, and Circuit structs in opendss.go. Circuit has LoadBusCoords and LoadCircuitModel methods for parsing, and ToGeoJSON() for conversion (absorbing WireConnectivity). Bus/Line/Vsource each have a ToFeature() method; Line and Vsource accept the busIndex as a parameter for coordinate resolution. Bus wiring (connected_assets) remains in ToGeoJSON as it is cross-cutting. RunConvert in main.go reduced to three lines: NewCircuit, Load*, ToGeoJSON. Tests updated to test via the struct API.
+
+[User] Use stdlib encoding/csv instead of manual CSV parsing for bus coordinates.
+
+[Claude] Replaced manual split-on-comma loop in LoadBusCoords with csv.NewReader(bytes.NewReader(data)).ReadAll(). No new dependency — encoding/csv is stdlib.
+
+[User] Bus/Line/Vsource each convert themselves to a GeoJSON feature — have ToFeature() methods on each struct.
+
+[Claude] Already done as part of the Circuit struct refactor above.
+
+[User] BusID should be its own type — normalizeBusID implies this.
+
+[Claude] Introduced BusID as a named string type with a NewBusID(raw string) BusID constructor that owns the normalization logic. normalizeBusID deleted. Bus.ID, Circuit.busIndex, and ToGeoJSON's busFeatureMap all use BusID. Compiler now prevents raw DSS spec strings from being used as bus keys. Conversions to string only happen at the GeoJSON output boundary.
+
+[User] Specs should also be its own struct.
+
+[Claude] Introduced Specs as a named type over map[string]interface{} with a String(key) string accessor method. Line.Specs and Vsource.Specs changed to Specs. parseSpecs returns Specs. All .(string) type assertions replaced with .String(). Tests updated accordingly.
+
+[User] Do we need both buses slice and busIndex map in Circuit? Can we just iterate the map?
+
+[Claude] Explained trade-off: map-only loses deterministic output order (Go map iteration is non-deterministic); slice-only loses O(1) lookup needed during ToGeoJSON for every line/vsource coordinate resolution. User chose to keep both.
+
+[User] Can NewBusID be simplified with a regex?
+
+[Claude] Replaced multi-step SplitN logic with a compiled package-level regex: `^(\d+)[_.]|^([^.]+)`. First alternative captures a numeric prefix before _ or .; second captures everything before the first dot. Eliminates strconv.Atoi check.
+
+[User] Can splitLines be dramatically simplified?
+
+[Claude] Reduced 20-line manual byte-walk to one line: strings.Split(strings.ReplaceAll(s, "\r\n", "\n"), "\n"). Empty line filtering remains at the call site in LoadCircuitModel.

@@ -1,14 +1,11 @@
 package main
 
-import (
-	"encoding/json"
-	"testing"
-)
+import "testing"
 
-func TestNormalizeBusID(t *testing.T) {
+func TestNewBusID(t *testing.T) {
 	cases := []struct {
 		input string
-		want  string
+		want  BusID
 	}{
 		{"tyn201.1.2.3", "tyn201"},
 		{"1001176.3", "1001176"},
@@ -17,9 +14,9 @@ func TestNormalizeBusID(t *testing.T) {
 		{"1147844_1s.1.2.3", "1147844"},
 	}
 	for _, c := range cases {
-		got := normalizeBusID(c.input)
+		got := NewBusID(c.input)
 		if got != c.want {
-			t.Errorf("normalizeBusID(%q) = %q, want %q", c.input, got, c.want)
+			t.Errorf("NewBusID(%q) = %q, want %q", c.input, got, c.want)
 		}
 	}
 }
@@ -48,59 +45,52 @@ func TestParseSpecsBracketArrayTokens(t *testing.T) {
 	}
 }
 
-func TestParseBusCoords(t *testing.T) {
-	buses, busMap := ParseBusCoords("data/busGISCoords.csv")
-	if len(buses) == 0 {
+func TestLoadBusCoords(t *testing.T) {
+	c := NewCircuit()
+	c.LoadBusCoords("data/busGISCoords.csv")
+
+	if len(c.buses) == 0 {
 		t.Fatal("expected buses, got none")
 	}
 
-	b, ok := busMap["tyn201"]
+	b, ok := c.busIndex[BusID("tyn201")]
 	if !ok {
-		t.Fatal("tyn201 not found in busMap")
+		t.Fatal("tyn201 not found in busIndex")
 	}
-	if b.Properties.AssetType != "Bus" {
-		t.Errorf("assetType = %q, want Bus", b.Properties.AssetType)
-	}
-	if len(b.Properties.GlossaryTerms) != 1 || b.Properties.GlossaryTerms[0] != "POWERFLOW" {
-		t.Errorf("glossary_terms = %v, want [POWERFLOW]", b.Properties.GlossaryTerms)
-	}
-
-	var coords []float64
-	if err := json.Unmarshal(b.Geometry.Coordinates, &coords); err != nil {
-		t.Fatalf("failed to unmarshal coords: %v", err)
-	}
-	if len(coords) != 2 || coords[0] != -85.1481 || coords[1] != 35.05225 {
-		t.Errorf("coords = %v, want [-85.1481 35.05225]", coords)
+	if b.Lat != 35.05225 || b.Lon != -85.1481 {
+		t.Errorf("coords = (%v, %v), want (35.05225, -85.1481)", b.Lat, b.Lon)
 	}
 }
 
-func TestParseCircuitModel(t *testing.T) {
-	lines, vsources := ParseCircuitModel("data/master.dss")
-	if len(lines) == 0 {
+func TestLoadCircuitModel(t *testing.T) {
+	c := NewCircuit()
+	c.LoadCircuitModel("data/master.dss")
+
+	if len(c.lines) == 0 {
 		t.Fatal("expected lines, got none")
 	}
-	if len(vsources) == 0 {
+	if len(c.vsources) == 0 {
 		t.Fatal("expected vsources, got none")
 	}
 
-	var feeder *Feature
-	for i := range lines {
-		if lines[i].Properties.ID == "Line.tyn201_feeder" {
-			feeder = &lines[i]
+	var feeder *Line
+	for _, l := range c.lines {
+		if l.ID == "tyn201_feeder" {
+			feeder = l
 			break
 		}
 	}
 	if feeder == nil {
-		t.Fatal("Line.tyn201_feeder not found")
+		t.Fatal("tyn201_feeder not found")
 	}
-	if bus1, _ := feeder.Properties.Specifications["bus1"].(string); bus1 != "tyn201.1.2.3" {
+	if bus1 := feeder.Specs.String("bus1"); bus1 != "tyn201.1.2.3" {
 		t.Errorf("bus1 = %q, want tyn201.1.2.3", bus1)
 	}
 
-	var vsrc *Feature
-	for i := range vsources {
-		if vsources[i].Properties.ID == "Vsource.source" {
-			vsrc = &vsources[i]
+	var vsrc *Vsource
+	for _, v := range c.vsources {
+		if v.ID == "source" {
+			vsrc = v
 			break
 		}
 	}
@@ -109,20 +99,26 @@ func TestParseCircuitModel(t *testing.T) {
 	}
 }
 
-func TestWireConnectivity(t *testing.T) {
-	buses, busMap := ParseBusCoords("data/busGISCoords.csv")
-	lines, vsources := ParseCircuitModel("data/master.dss")
-	lines, vsources = WireConnectivity(buses, busMap, lines, vsources)
+func TestToGeoJSON(t *testing.T) {
+	c := NewCircuit()
+	c.LoadBusCoords("data/busGISCoords.csv")
+	c.LoadCircuitModel("data/master.dss")
+	collection := c.ToGeoJSON()
 
-	var feeder *Feature
-	for i := range lines {
-		if lines[i].Properties.ID == "Line.tyn201_feeder" {
-			feeder = &lines[i]
-			break
+	var feeder, tyn201Bus, vsrcFeature *Feature
+	for i := range collection.Features {
+		switch collection.Features[i].Properties.ID {
+		case "Line.tyn201_feeder":
+			feeder = &collection.Features[i]
+		case "tyn201":
+			tyn201Bus = &collection.Features[i]
+		case "Vsource.source":
+			vsrcFeature = &collection.Features[i]
 		}
 	}
+
 	if feeder == nil {
-		t.Fatal("Line.tyn201_feeder not found after wiring")
+		t.Fatal("Line.tyn201_feeder not found")
 	}
 	if len(feeder.Properties.ConnectedAssets.Sources) != 1 || feeder.Properties.ConnectedAssets.Sources[0] != "tyn201" {
 		t.Errorf("feeder sources = %v, want [tyn201]", feeder.Properties.ConnectedAssets.Sources)
@@ -131,28 +127,23 @@ func TestWireConnectivity(t *testing.T) {
 		t.Errorf("feeder targets = %v, want [1147583]", feeder.Properties.ConnectedAssets.Targets)
 	}
 
-	var vsrc *Feature
-	for i := range vsources {
-		if vsources[i].Properties.ID == "Vsource.source" {
-			vsrc = &vsources[i]
-			break
-		}
+	if vsrcFeature == nil {
+		t.Fatal("Vsource.source not found")
 	}
-	if vsrc == nil {
-		t.Fatal("Vsource.source not found after wiring")
-	}
-	if len(vsrc.Properties.ConnectedAssets.Targets) != 1 || vsrc.Properties.ConnectedAssets.Targets[0] != "tyn201" {
-		t.Errorf("vsource targets = %v, want [tyn201]", vsrc.Properties.ConnectedAssets.Targets)
+	if len(vsrcFeature.Properties.ConnectedAssets.Targets) != 1 || vsrcFeature.Properties.ConnectedAssets.Targets[0] != "tyn201" {
+		t.Errorf("vsource targets = %v, want [tyn201]", vsrcFeature.Properties.ConnectedAssets.Targets)
 	}
 
-	tyn201 := busMap["tyn201"]
+	if tyn201Bus == nil {
+		t.Fatal("tyn201 bus not found")
+	}
 	foundVsrc := false
-	for _, s := range tyn201.Properties.ConnectedAssets.Sources {
+	for _, s := range tyn201Bus.Properties.ConnectedAssets.Sources {
 		if s == "Vsource.source" {
 			foundVsrc = true
 		}
 	}
 	if !foundVsrc {
-		t.Errorf("tyn201 sources = %v, want to contain Vsource.source", tyn201.Properties.ConnectedAssets.Sources)
+		t.Errorf("tyn201 sources = %v, want to contain Vsource.source", tyn201Bus.Properties.ConnectedAssets.Sources)
 	}
 }

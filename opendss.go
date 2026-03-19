@@ -1,50 +1,239 @@
 package main
 
 import (
+	"bytes"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 )
 
-func SplitLines(s string) []string {
-	var lines []string
-	start := 0
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\n' {
-			line := s[start:i]
-			if len(line) > 0 && line[len(line)-1] == '\r' {
-				line = line[:len(line)-1]
-			}
-			lines = append(lines, line)
-			start = i + 1
-		}
+type BusID string
+
+var busIDRe = regexp.MustCompile(`^(\d+)[_.]|^([^.]+)`)
+
+func NewBusID(raw string) BusID {
+	m := busIDRe.FindStringSubmatch(raw)
+	if m == nil {
+		return BusID(raw)
 	}
-	if start < len(s) {
-		line := s[start:]
-		if len(line) > 0 && line[len(line)-1] == '\r' {
-			line = line[:len(line)-1]
-		}
-		lines = append(lines, line)
+	if m[1] != "" {
+		return BusID(m[1])
 	}
-	return lines
+	return BusID(m[2])
 }
 
-func normalizeBusID(raw string) string {
-	dotParts := strings.SplitN(raw, ".", 2)
-	base := dotParts[0]
-	underParts := strings.SplitN(base, "_", 2)
-	if len(underParts) > 1 {
-		if _, err := strconv.Atoi(underParts[0]); err == nil {
-			return underParts[0]
-		}
-	}
-	return base
+type Specs map[string]interface{}
+
+func (s Specs) String(key string) string {
+	v, _ := s[key].(string)
+	return v
 }
 
-func parseSpecs(tokens []string) map[string]interface{} {
-	specs := make(map[string]interface{})
+type Bus struct {
+	ID  BusID
+	Lat float64
+	Lon float64
+}
+
+type Line struct {
+	ID    string
+	Specs Specs
+}
+
+type Vsource struct {
+	ID    string
+	Specs Specs
+}
+
+type Circuit struct {
+	buses    []*Bus
+	lines    []*Line
+	vsources []*Vsource
+	busIndex map[BusID]*Bus
+}
+
+func NewCircuit() *Circuit {
+	return &Circuit{busIndex: make(map[BusID]*Bus)}
+}
+
+func (c *Circuit) LoadBusCoords(filePath string) {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading bus coords: %v\n", err)
+		os.Exit(1)
+	}
+	records, err := csv.NewReader(bytes.NewReader(data)).ReadAll()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing bus coords: %v\n", err)
+		os.Exit(1)
+	}
+	for _, row := range records {
+		if len(row) < 3 {
+			continue
+		}
+		id := BusID(strings.TrimSpace(row[0]))
+		lat, _ := strconv.ParseFloat(strings.TrimSpace(row[1]), 64)
+		lon, _ := strconv.ParseFloat(strings.TrimSpace(row[2]), 64)
+		b := &Bus{ID: id, Lat: lat, Lon: lon}
+		c.buses = append(c.buses, b)
+		c.busIndex[id] = b
+	}
+}
+
+func (c *Circuit) LoadCircuitModel(filePath string) {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading circuit model: %v\n", err)
+		os.Exit(1)
+	}
+	for _, rawLine := range splitLines(string(data)) {
+		rawLine = strings.TrimSpace(rawLine)
+		if rawLine == "" {
+			continue
+		}
+		tokens := strings.Fields(rawLine)
+		if len(tokens) < 2 {
+			continue
+		}
+
+		isLine := tokens[0] == "New" && strings.HasPrefix(tokens[1], "\"Line.")
+		isVsource := strings.Contains(tokens[1], "\"Vsource.")
+
+		if !isLine && !isVsource {
+			continue
+		}
+
+		fullID := strings.Trim(tokens[1], "\"")
+		parts := strings.SplitN(fullID, ".", 2)
+		id := ""
+		if len(parts) == 2 {
+			id = parts[1]
+		}
+
+		specs := parseSpecs(tokens[2:])
+
+		if isLine {
+			c.lines = append(c.lines, &Line{ID: id, Specs: specs})
+		} else {
+			c.vsources = append(c.vsources, &Vsource{ID: id, Specs: specs})
+		}
+	}
+}
+
+func (b *Bus) ToFeature() Feature {
+	coords, _ := json.Marshal([]float64{b.Lon, b.Lat})
+	return Feature{
+		Type:     "Feature",
+		Geometry: Geometry{Type: "Point", Coordinates: coords},
+		Properties: Properties{
+			ID:              string(b.ID),
+			Name:            string(b.ID),
+			AssetType:       "Bus",
+			GlossaryTerms:   []string{"POWERFLOW"},
+			ConnectedAssets: ConnectedAssets{Sources: []string{}, Targets: []string{}},
+		},
+	}
+}
+
+func (l *Line) ToFeature(busIndex map[BusID]*Bus) Feature {
+	bus1ID := NewBusID(l.Specs.String("bus1"))
+	bus2ID := NewBusID(l.Specs.String("bus2"))
+
+	var coords json.RawMessage
+	b1, ok1 := busIndex[bus1ID]
+	b2, ok2 := busIndex[bus2ID]
+	if ok1 && ok2 {
+		coords, _ = json.Marshal([][]float64{{b1.Lon, b1.Lat}, {b2.Lon, b2.Lat}})
+	}
+
+	id := "Line." + l.ID
+	return Feature{
+		Type:     "Feature",
+		Geometry: Geometry{Type: "LineString", Coordinates: coords},
+		Properties: Properties{
+			ID:              id,
+			Name:            id,
+			AssetType:       "Line",
+			Specifications:  l.Specs,
+			GlossaryTerms:   []string{},
+			ConnectedAssets: ConnectedAssets{Sources: []string{string(bus1ID)}, Targets: []string{string(bus2ID)}},
+		},
+	}
+}
+
+func (v *Vsource) ToFeature(busIndex map[BusID]*Bus) Feature {
+	bus1ID := NewBusID(v.Specs.String("bus1"))
+
+	var coords json.RawMessage
+	if b, ok := busIndex[bus1ID]; ok {
+		coords, _ = json.Marshal([]float64{b.Lon, b.Lat})
+	}
+
+	id := "Vsource." + v.ID
+	return Feature{
+		Type:     "Feature",
+		Geometry: Geometry{Type: "Point", Coordinates: coords},
+		Properties: Properties{
+			ID:              id,
+			Name:            id,
+			AssetType:       "Vsource",
+			Specifications:  v.Specs,
+			GlossaryTerms:   []string{"POWERFLOW"},
+			ConnectedAssets: ConnectedAssets{Sources: []string{}, Targets: []string{string(bus1ID)}},
+		},
+	}
+}
+
+func (c *Circuit) ToGeoJSON() GeoJSONFeatureCollection {
+	busFeatures := make([]Feature, len(c.buses))
+	busFeatureMap := make(map[BusID]*Feature)
+	for i, b := range c.buses {
+		busFeatures[i] = b.ToFeature()
+		busFeatureMap[b.ID] = &busFeatures[i]
+	}
+
+	lineFeatures := make([]Feature, len(c.lines))
+	for i, l := range c.lines {
+		lineFeatures[i] = l.ToFeature(c.busIndex)
+		bus1ID := BusID(lineFeatures[i].Properties.ConnectedAssets.Sources[0])
+		bus2ID := BusID(lineFeatures[i].Properties.ConnectedAssets.Targets[0])
+		lineID := lineFeatures[i].Properties.ID
+		if bf, ok := busFeatureMap[bus1ID]; ok {
+			bf.Properties.ConnectedAssets.Targets = append(bf.Properties.ConnectedAssets.Targets, lineID)
+		}
+		if bf, ok := busFeatureMap[bus2ID]; ok {
+			bf.Properties.ConnectedAssets.Sources = append(bf.Properties.ConnectedAssets.Sources, lineID)
+		}
+	}
+
+	vsourceFeatures := make([]Feature, len(c.vsources))
+	for i, v := range c.vsources {
+		vsourceFeatures[i] = v.ToFeature(c.busIndex)
+		bus1ID := BusID(vsourceFeatures[i].Properties.ConnectedAssets.Targets[0])
+		vsrcID := vsourceFeatures[i].Properties.ID
+		if bf, ok := busFeatureMap[bus1ID]; ok {
+			bf.Properties.ConnectedAssets.Sources = append(bf.Properties.ConnectedAssets.Sources, vsrcID)
+		}
+	}
+
+	var features []Feature
+	features = append(features, busFeatures...)
+	features = append(features, lineFeatures...)
+	features = append(features, vsourceFeatures...)
+
+	return GeoJSONFeatureCollection{Type: "FeatureCollection", Features: features}
+}
+
+func splitLines(s string) []string {
+	return strings.Split(strings.ReplaceAll(s, "\r\n", "\n"), "\n")
+}
+
+func parseSpecs(tokens []string) Specs {
+	specs := make(Specs)
 	var accumKey string
 	var accumParts []string
 	var accumEnd byte
@@ -80,171 +269,4 @@ func parseSpecs(tokens []string) map[string]interface{} {
 		}
 	}
 	return specs
-}
-
-func ParseBusCoords(filePath string) ([]Feature, map[string]*Feature) {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error reading bus coords: %v\n", err)
-		os.Exit(1)
-	}
-
-	var buses []Feature
-	for _, line := range SplitLines(string(data)) {
-		if line == "" {
-			continue
-		}
-		parts := strings.Split(line, ",")
-		if len(parts) < 3 {
-			continue
-		}
-		id := strings.TrimSpace(parts[0])
-		lat, _ := strconv.ParseFloat(strings.TrimSpace(parts[1]), 64)
-		lon, _ := strconv.ParseFloat(strings.TrimSpace(parts[2]), 64)
-
-		coords, _ := json.Marshal([]float64{lon, lat})
-		buses = append(buses, Feature{
-			Type: "Feature",
-			Geometry: Geometry{
-				Type:        "Point",
-				Coordinates: coords,
-			},
-			Properties: Properties{
-				ID:            id,
-				Name:          id,
-				AssetType:     "Bus",
-				GlossaryTerms: []string{"POWERFLOW"},
-				ConnectedAssets: ConnectedAssets{
-					Sources: []string{},
-					Targets: []string{},
-				},
-			},
-		})
-	}
-
-	busMap := make(map[string]*Feature)
-	for i := range buses {
-		busMap[buses[i].Properties.ID] = &buses[i]
-	}
-	return buses, busMap
-}
-
-func ParseCircuitModel(filePath string) ([]Feature, []Feature) {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error reading circuit model: %v\n", err)
-		os.Exit(1)
-	}
-
-	var lines []Feature
-	var vsources []Feature
-
-	for _, rawLine := range SplitLines(string(data)) {
-		rawLine = strings.TrimSpace(rawLine)
-		if rawLine == "" {
-			continue
-		}
-		tokens := strings.Fields(rawLine)
-		if len(tokens) < 2 {
-			continue
-		}
-
-		isLine := tokens[0] == "New" && strings.HasPrefix(tokens[1], "\"Line.")
-		isVsource := strings.Contains(tokens[1], "\"Vsource.")
-
-		if !isLine && !isVsource {
-			continue
-		}
-
-		fullID := strings.Trim(tokens[1], "\"")
-		parts := strings.SplitN(fullID, ".", 2)
-		id := ""
-		if len(parts) == 2 {
-			id = parts[1]
-		}
-
-		specs := parseSpecs(tokens[2:])
-
-		if isLine {
-			lines = append(lines, Feature{
-				Type: "Feature",
-				Geometry: Geometry{
-					Type: "LineString",
-				},
-				Properties: Properties{
-					ID:              "Line." + id,
-					Name:            "Line." + id,
-					AssetType:       "Line",
-					Specifications:  specs,
-					GlossaryTerms:   []string{},
-					ConnectedAssets: ConnectedAssets{Sources: []string{}, Targets: []string{}},
-				},
-			})
-		} else {
-			vsources = append(vsources, Feature{
-				Type: "Feature",
-				Geometry: Geometry{
-					Type: "Point",
-				},
-				Properties: Properties{
-					ID:              "Vsource." + id,
-					Name:            "Vsource." + id,
-					AssetType:       "Vsource",
-					Specifications:  specs,
-					GlossaryTerms:   []string{"POWERFLOW"},
-					ConnectedAssets: ConnectedAssets{Sources: []string{}, Targets: []string{}},
-				},
-			})
-		}
-	}
-
-	return lines, vsources
-}
-
-func WireConnectivity(buses []Feature, busMap map[string]*Feature, lines []Feature, vsources []Feature) ([]Feature, []Feature) {
-	for i := range lines {
-		specs := lines[i].Properties.Specifications
-		bus1Raw, _ := specs["bus1"].(string)
-		bus2Raw, _ := specs["bus2"].(string)
-		bus1ID := normalizeBusID(bus1Raw)
-		bus2ID := normalizeBusID(bus2Raw)
-
-		lines[i].Properties.ConnectedAssets.Sources = []string{bus1ID}
-		lines[i].Properties.ConnectedAssets.Targets = []string{bus2ID}
-
-		b1, ok1 := busMap[bus1ID]
-		b2, ok2 := busMap[bus2ID]
-
-		if ok1 && ok2 {
-			var coord1, coord2 []float64
-			json.Unmarshal(b1.Geometry.Coordinates, &coord1)
-			json.Unmarshal(b2.Geometry.Coordinates, &coord2)
-			lineCoords, _ := json.Marshal([][]float64{coord1, coord2})
-			lines[i].Geometry.Coordinates = lineCoords
-		}
-
-		lineRef := lines[i].Properties.ID
-		if ok1 {
-			b1.Properties.ConnectedAssets.Targets = append(b1.Properties.ConnectedAssets.Targets, lineRef)
-		}
-		if ok2 {
-			b2.Properties.ConnectedAssets.Sources = append(b2.Properties.ConnectedAssets.Sources, lineRef)
-		}
-	}
-
-	for i := range vsources {
-		specs := vsources[i].Properties.Specifications
-		bus1Raw, _ := specs["bus1"].(string)
-		bus1ID := normalizeBusID(bus1Raw)
-
-		vsources[i].Properties.ConnectedAssets.Targets = []string{bus1ID}
-		vsources[i].Properties.ConnectedAssets.Sources = []string{}
-
-		if b, ok := busMap[bus1ID]; ok {
-			vsources[i].Geometry.Coordinates = b.Geometry.Coordinates
-			b.Properties.ConnectedAssets.Sources = append(b.Properties.ConnectedAssets.Sources, vsources[i].Properties.ID)
-		}
-	}
-
-	return lines, vsources
 }
