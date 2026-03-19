@@ -7,23 +7,15 @@ type Node struct {
 }
 
 type Edge struct {
-	From *Node
-	To   *Node
+	A *Node
+	B *Node
 }
 
+// Represents an undirected and unweighted graph.
 type Graph struct {
 	nodes map[NodeID]*Node
 	edges []*Edge
 	adj   map[NodeID][]*Node
-}
-
-
-func (g *Graph) Nodes() []*Node {
-	nodes := make([]*Node, 0, len(g.nodes))
-	for _, n := range g.nodes {
-		nodes = append(nodes, n)
-	}
-	return nodes
 }
 
 func (g *Graph) Edges() []*Edge {
@@ -34,6 +26,8 @@ func (g *Graph) Node(id NodeID) *Node {
 	return g.nodes[id]
 }
 
+// Breadth-first-searh for the smallest number of hops between two nodes.
+// Returns -1 if the two nodes are unconnected.
 func (g *Graph) ShortestPath(source, target *Node) int {
 	if source == nil || target == nil {
 		return -1
@@ -41,11 +35,13 @@ func (g *Graph) ShortestPath(source, target *Node) int {
 	if source == target {
 		return 0
 	}
+
 	type item struct {
 		node *Node
 		dist int
 	}
 	visited := map[NodeID]bool{source.ID: true}
+
 	queue := []item{{source, 0}}
 	for len(queue) > 0 {
 		curr := queue[0]
@@ -60,5 +56,6 @@ func (g *Graph) ShortestPath(source, target *Node) int {
 			}
 		}
 	}
+
 	return -1
 }

@@ -17,6 +17,8 @@ func (s Specs) String(key string) string {
 	return v
 }
 
+// Circuit is what I'm calling the overall model for what's in the OpenDSS file
+// because the OpenDSS file describes an interconnected set of voltage sources.
 type Circuit struct {
 	lines    []*Line
 	vsources []*Vsource
@@ -27,6 +29,7 @@ func NewCircuit() *Circuit {
 	return &Circuit{busIndex: make(map[BusID]*Bus)}
 }
 
+// Loads a csv file decorating busses with lat/lon.
 func (c *Circuit) LoadBusCoords(filePath string) error {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
@@ -48,16 +51,24 @@ func (c *Circuit) LoadBusCoords(filePath string) error {
 	return nil
 }
 
+// This is the main parser for the OpenDSS master file.
 func (c *Circuit) LoadCircuitModel(filePath string) error {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return err
 	}
-	for _, rawLine := range splitLines(string(data)) {
+
+	// Each line is a new entry; a newline might be linux (\n) or windows (\r\n)
+	lines := strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n")
+
+	for _, rawLine := range lines {
+		// Clean up
 		rawLine = strings.TrimSpace(rawLine)
 		if rawLine == "" {
 			continue
 		}
+
+		// Valid line?
 		tokens := strings.Fields(rawLine)
 		if len(tokens) < 2 {
 			continue
@@ -66,6 +77,7 @@ func (c *Circuit) LoadCircuitModel(filePath string) error {
 		isLine := tokens[0] == "New" && strings.HasPrefix(tokens[1], "\"Line.")
 		isVsource := strings.Contains(tokens[1], "\"Vsource.")
 
+		// Only interested in lines and vsources.
 		if !isLine && !isVsource {
 			continue
 		}
@@ -80,15 +92,17 @@ func (c *Circuit) LoadCircuitModel(filePath string) error {
 		specs := parseSpecs(tokens[2:])
 
 		if isLine {
-			c.lines = append(c.lines, &Line{ID: id, Specs: specs})
+			c.lines = append(c.lines, &Line{ID: id, Bus1: NewBusID(specs.String("bus1")), Bus2: NewBusID(specs.String("bus2")), Specs: specs})
 		} else {
-			c.vsources = append(c.vsources, &Vsource{ID: id, Specs: specs})
+			c.vsources = append(c.vsources, &Vsource{ID: id, Bus1: NewBusID(specs.String("bus1")), Specs: specs})
 		}
 	}
 	return nil
 }
 
-func (c *Circuit) ToGeoJSON() *geojson.GeoJSONFeatureCollection {
+// Converts the whole Circuit to a giant GeoJSON.
+func (c *Circuit) ToGeoJSON() *geojson.FeatureCollection {
+
 	busFeatures := make([]*geojson.Feature, 0, len(c.busIndex))
 	busFeatureMap := make(map[BusID]*geojson.Feature, len(c.busIndex))
 	for _, b := range c.busIndex {
@@ -96,6 +110,9 @@ func (c *Circuit) ToGeoJSON() *geojson.GeoJSONFeatureCollection {
 		busFeatureMap[b.ID] = busFeatures[len(busFeatures)-1]
 	}
 
+	// Enrich the lines with their connected busses.
+	// Because the busses are in a map, this makes the lookups O(1)
+	// and we are iterating linearly over the lines, so this remains O(n).
 	lineFeatures := make([]*geojson.Feature, len(c.lines))
 	for i, l := range c.lines {
 		lineFeatures[i] = l.ToFeature(c.busIndex)
@@ -110,6 +127,9 @@ func (c *Circuit) ToGeoJSON() *geojson.GeoJSONFeatureCollection {
 		}
 	}
 
+	// Enrich the vsources with their busses.
+	// Like with lines, this is O(n) because we iterate over the vsources once and use
+	// a hashmap with O(1) lookups to get the bus.
 	vsourceFeatures := make([]*geojson.Feature, len(c.vsources))
 	for i, v := range c.vsources {
 		vsourceFeatures[i] = v.ToFeature(c.busIndex)
@@ -120,18 +140,19 @@ func (c *Circuit) ToGeoJSON() *geojson.GeoJSONFeatureCollection {
 		}
 	}
 
+	// ...and the geojson file is just a giant assemblage of all the individial
+	// elements (busses, lines, and vsources) enriched with their connectivity.
 	var features []*geojson.Feature
 	features = append(features, busFeatures...)
 	features = append(features, lineFeatures...)
 	features = append(features, vsourceFeatures...)
 
-	return geojson.NewGeoJSONFeatureCollection(features)
+	return geojson.NewFeatureCollection(features)
 }
 
-func splitLines(s string) []string {
-	return strings.Split(strings.ReplaceAll(s, "\r\n", "\n"), "\n")
-}
-
+// Pulls out the raw key/value pairs from OpenDSS that may be in various
+// formats delimited with double-quotes and square-brackets. This isn't the
+// entirity of the OpenDSS spec, but it'll do for now.
 func parseSpecs(tokens []string) Specs {
 	specs := make(Specs)
 	var accumKey string

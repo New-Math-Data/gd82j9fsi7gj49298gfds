@@ -5,19 +5,23 @@ import (
 	"os"
 )
 
-type GeoJSONFeatureCollection struct { //nolint:revive // GeoJSONFeatureCollection is simply the defined name, even though it stutters
+type FeatureCollection struct {
 	Type     string     `json:"type"`
 	Features []*Feature `json:"features"`
 }
 
-func NewGeoJSONFeatureCollection(features []*Feature) *GeoJSONFeatureCollection {
-	return &GeoJSONFeatureCollection{Type: "FeatureCollection", Features: features}
+func NewFeatureCollection(features []*Feature) *FeatureCollection {
+	return &FeatureCollection{Type: "FeatureCollection", Features: features}
 }
 
 type Feature struct {
 	Type       string     `json:"type"`
 	Geometry   Geometry   `json:"geometry"`
 	Properties Properties `json:"properties"`
+}
+
+func NewFeature(geometry *Geometry, properties *Properties) *Feature {
+	return &Feature{Type: "Feature", Geometry: *geometry, Properties: *properties}
 }
 
 type Geometry struct {
@@ -39,13 +43,13 @@ type Properties struct {
 	GlossaryTerms   []string               `json:"glossary_terms"`
 }
 
-func LoadGeoJSON(filePath string) (*GeoJSONFeatureCollection, error) {
+func LoadGeoJSON(filePath string) (*FeatureCollection, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, err
 	}
 	// GeoJSONFeatureCollection is just a giant JSON, so we can unmarshal it directly!
-	var collection GeoJSONFeatureCollection
+	var collection FeatureCollection
 	if err := json.Unmarshal(data, &collection); err != nil {
 		return nil, err
 	}

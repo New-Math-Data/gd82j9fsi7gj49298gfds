@@ -1,24 +1,21 @@
 package opendss
 
 import (
-	"regexp"
+	"strings"
 
 	"opendss-assessment/geojson"
 )
 
 type BusID string
 
-var busIDRe = regexp.MustCompile(`^(\d+)[_.]|^([^.]+)`)
-
+// Normalizes a given Bus ID. Sometimes a Bus ID is presented in the form
+// of the canonical ID followed by metadata, delimited with a period or underscore.
 func NewBusID(raw string) BusID {
-	m := busIDRe.FindStringSubmatch(raw)
-	if m == nil {
-		return BusID(raw)
+	// Take everything before the first period or underscore.
+	if i := strings.IndexAny(raw, "._"); i >= 0 {
+		return BusID(raw[:i])
 	}
-	if m[1] != "" {
-		return BusID(m[1])
-	}
-	return BusID(m[2])
+	return BusID(raw)
 }
 
 type Bus struct {
@@ -27,16 +24,14 @@ type Bus struct {
 	Lon float64
 }
 
+// Convert Bus from OpenDSS to GeoJSON.
 func (b *Bus) ToFeature() *geojson.Feature {
-	return &geojson.Feature{
-		Type:     "Feature",
-		Geometry: geojson.Geometry(geojson.NewPoint(b.Lon, b.Lat)),
-		Properties: geojson.Properties{
-			ID:              string(b.ID),
-			Name:            string(b.ID),
-			AssetType:       "Bus",
-			GlossaryTerms:   []string{"POWERFLOW"},
-			ConnectedAssets: geojson.ConnectedAssets{Sources: []string{}, Targets: []string{}},
-		},
-	}
+	geom := geojson.Geometry(*geojson.NewPoint(b.Lon, b.Lat))
+	return geojson.NewFeature(&geom, &geojson.Properties{
+		ID:              string(b.ID),
+		Name:            string(b.ID),
+		AssetType:       "Bus",
+		GlossaryTerms:   []string{"POWERFLOW"},
+		ConnectedAssets: geojson.ConnectedAssets{Sources: []string{}, Targets: []string{}},
+	})
 }

@@ -8,10 +8,9 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-
 func TestLoadGeoJSON(t *testing.T) {
 	// Tests loading one of every type of object: Line, Bus, Vsource
-	marshalled := &GeoJSONFeatureCollection{
+	marshalled := &FeatureCollection{
 		Type: "FeatureCollection",
 		Features: []*Feature{
 			{
@@ -257,7 +256,7 @@ func TestLoadGeoJSONEmptyFeatures(t *testing.T) {
 }
 
 func TestBuildGraphUndirected(t *testing.T) {
-	collection := GeoJSONFeatureCollection{
+	collection := FeatureCollection{
 		Type: "FeatureCollection",
 		Features: []*Feature{
 			{
@@ -276,19 +275,7 @@ func TestBuildGraphUndirected(t *testing.T) {
 		},
 	}
 	g := collection.BuildGraph()
-	foundAB, foundBA := false, false
-	for _, e := range g.Edges() {
-		if e.From.ID == "A" && e.To.ID == "B" {
-			foundAB = true
-		}
-		if e.From.ID == "B" && e.To.ID == "A" {
-			foundBA = true
-		}
-	}
-	if !foundAB {
-		t.Error("expected A -> B edge")
-	}
-	if !foundBA {
-		t.Error("expected B -> A edge (undirected)")
-	}
+	a, b := g.Node("A"), g.Node("B")
+	assert.Equal(t, 1, g.ShortestPath(a, b), "expected A -> B")
+	assert.Equal(t, 1, g.ShortestPath(b, a), "expected B -> A (undirected)")
 }

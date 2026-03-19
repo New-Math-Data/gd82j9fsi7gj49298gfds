@@ -157,3 +157,61 @@
 [User] Update the claude transcript. Also, update it automatically before every context compaction.
 
 [Claude] Appended all exchanges since last update to results/claude.transcript. Saving a feedback memory to always update the transcript before compacting.
+
+[User] Add a new type Point Geometry to allow a more graceful interface than [2]float64 when building LineStrings.
+
+[Claude] Added type Point Geometry to geojson/geometry.go. Changed NewPoint to return *Point. Changed NewLineString to take ...*Point and collect each point's raw coordinates into the LineString's JSON array (no unmarshal/remarshal roundtrip — just lifts the RawMessage directly). Updated bus.go, line.go, vsource.go to use Geometry(*geojson.NewPoint(...)) at call sites where Feature.Geometry (type Geometry) is needed.
+
+[User] Do the same for LineString.
+
+[Claude] Added type LineString Geometry. Changed NewLineString to return *LineString. Updated line.go: geojson.Geometry(*geojson.NewLineString(...)).
+
+[User] Add a builder to graph so we can "stream in" nodes and edges instead of providing them in two big arrays.
+
+[Claude] Added Builder struct with AddNode (idempotent), AddEdge (directed, updates adj), and Build to graph/builder.go. Kept NewGraph for existing callers.
+
+[User] Remove all uses of NewGraph, replacing them with the graph builder.
+
+[Claude] Rewrote geojson/build_graph.go to use Builder — the manual getOrCreate closure and node-collection loop collapsed into AddEdge's implicit AddNode. Rewrote all four graph_test.go tests to use Builder. Deleted NewGraph from graph.go.
+
+[User] Can the adjacency map be built as edges are added?
+
+[Claude] Moved adj map into Builder. AddEdge now updates adj immediately. Build() becomes a trivial pointer return with no data movement.
+
+[User] Just use a graph under the builder instead of copying the data structs.
+
+[Claude] Builder now holds a *Graph directly. AddNode and ConnectNodes mutate it in place. Build() returns the pointer as-is.
+
+[User] Throughout, convert any non-primitive type to a pointer in function arguments and returns, except for JSON-serialized struct fields that must serialize even when empty.
+
+[Claude] Changed Features []Feature → []*Feature in GeoJSONFeatureCollection (and NewGeoJSONFeatureCollection param). Changed ToFeature() on Bus, Line, Vsource to return *geojson.Feature. Updated circuit.go slices to []*geojson.Feature, dropped &busFeatures[len-1] trick. Updated geojson_test.go to []*Feature{...} and opendss_test.go range loop to for _, f := range. Geometry, Properties, ConnectedAssets kept as value types in their parent structs since they are always serialized.
+
+[User] Remove all uses of NewGraph, replacing them with the graph builder. (already done above)
+
+[User] For Vsource and Line, ensure bus1 and bus2 are actual members of the struct.
+
+[Claude] Added Bus1 BusID to Vsource and Bus1, Bus2 BusID to Line. Populated in LoadCircuitModel at parse time via NewBusID(specs.String("bus1/2")). ToFeature on both structs now reads directly from typed fields instead of Specs.
+
+[User] When converting from OpenDSS to GeoJSON, use the NewFeature method so type="Feature" does not have to be hardcoded everywhere.
+
+[Claude] Updated Bus.ToFeature, Line.ToFeature, and Vsource.ToFeature to call geojson.NewFeature(&geom, &geojson.Properties{...}) instead of constructing &geojson.Feature{Type:"Feature",...} directly.
+
+[User] The bus ID parsing may be overcomplicated — you simply need the string leading up to the first period or underscore.
+
+[Claude] Replaced compiled regex + FindStringSubmatch with strings.IndexAny(raw, "._"). Removed regexp import. NewBusID is now four lines.
+
+[User] Remove the ability of the graph abstraction to hold directed data. Optimize it for undirected edges.
+
+[Claude] Renamed Edge.From/To → Edge.A/B. Removed directed AddEdge; merged its body into AddUndirectedEdge and renamed that to AddEdge (now always populates both adj directions). Updated graph_test.go to drop reverse-edge calls. Updated build_graph.go and geojson_test.go (TestBuildGraphUndirected now uses ShortestPath instead of iterating g.Edges()).
+
+[User] Instead of saving two edges between every src/target to represent an undirected graph, is there a more efficient data structure?
+
+[Claude] Added AddUndirectedEdge to Builder: stores one Edge but populates adj in both directions. Updated build_graph.go to use it (one call instead of two). Rewrote TestBuildGraphUndirected to assert ShortestPath in both directions rather than checking g.Edges() for both directed entries.
+
+[User] AddEdge should take two Node pointers. Since this is undirected, rename it to ConnectNodes. Callers must call AddNode first.
+
+[Claude] Renamed AddEdge → ConnectNodes, changed signature to (a, b *Node). Removed implicit AddNode calls inside it. Updated graph_test.go (explicit AddNode before ConnectNodes) and build_graph.go (separate AddNode calls then ConnectNodes).
+
+[User] Update the claude transcript.
+
+[Claude] Appended all exchanges since last update to results/claude.transcript.

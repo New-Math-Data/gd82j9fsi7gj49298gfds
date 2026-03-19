@@ -3,35 +3,33 @@ package graph
 // Graph builder allows you to "stream" nodes and edges into the data structure
 // instead of collect and manage all that yourself.
 type Builder struct {
-	nodes map[NodeID]*Node
-	edges []*Edge
+	g *Graph
 }
 
 func NewBuilder() *Builder {
-	return &Builder{nodes: make(map[NodeID]*Node)}
+	return &Builder{g: &Graph{
+		nodes: make(map[NodeID]*Node),
+		adj:   make(map[NodeID][]*Node),
+	}}
 }
 
 func (b *Builder) AddNode(id NodeID) *Node {
-	if n, ok := b.nodes[id]; ok {
+	if n, ok := b.g.nodes[id]; ok {
 		return n
 	}
 	n := &Node{ID: id}
-	b.nodes[id] = n
+	b.g.nodes[id] = n
 	return n
 }
 
-func (b *Builder) AddEdge(from, to NodeID) *Edge {
-	f := b.AddNode(from)
-	t := b.AddNode(to)
-	e := &Edge{From: f, To: t}
-	b.edges = append(b.edges, e)
+func (b *Builder) ConnectNodes(an, bn *Node) *Edge {
+	e := &Edge{A: an, B: bn}
+	b.g.edges = append(b.g.edges, e)
+	b.g.adj[an.ID] = append(b.g.adj[an.ID], bn)
+	b.g.adj[bn.ID] = append(b.g.adj[bn.ID], an)
 	return e
 }
 
 func (b *Builder) Build() *Graph {
-	adj := make(map[NodeID][]*Node, len(b.nodes))
-	for _, e := range b.edges {
-		adj[e.From.ID] = append(adj[e.From.ID], e.To)
-	}
-	return &Graph{nodes: b.nodes, edges: b.edges, adj: adj}
+	return b.g
 }
