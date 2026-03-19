@@ -23,7 +23,7 @@ func NewVsourceFromOpenDSS(rawLine string) *Vsource {
 }
 
 // Convert Vsource from OpenDSS to GeoJSON.
-func (v *Vsource) ToFeature(busIndex map[BusID]*Bus) *geojson.Feature {
+func (v *Vsource) ToGeoJSONFeature(busIndex map[BusID]*Bus) *geojson.Feature {
 	var geom geojson.Geometry
 	if b, ok := busIndex[v.BusID]; ok {
 		geom = geojson.Geometry(*geojson.NewPoint(b.Lon, b.Lat))

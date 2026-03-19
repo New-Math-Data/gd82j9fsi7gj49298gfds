@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNewBus(t *testing.T) {
+func TestNewBusFromCSV(t *testing.T) {
 	b := NewBusFromCSV([]string{"tyn201", "35.05225", "-85.1481"})
 	require.NotNil(t, b)
 	assert.Equal(t, BusID("tyn201"), b.ID)
@@ -44,4 +44,25 @@ func TestLoadBusCoords(t *testing.T) {
 	require.True(t, ok, "tyn201 not found in busIndex")
 	assert.Equal(t, 35.05225, b.Lat)
 	assert.Equal(t, -85.1481, b.Lon)
+}
+
+func TestOpenDSSBusToGeoJSONBus(t *testing.T) {
+	b := NewBusFromCSV([]string{"tyn201", "35.05225", "-85.1481"})
+	require.NotNil(t, b)
+
+	f := b.ToGeoJsonFeature()
+	require.NotNil(t, f)
+
+	assert.Equal(t, "Feature", f.Type)
+	assert.Equal(t, "Point", f.Geometry.Type)
+	assert.JSONEq(t, `[-85.1481, 35.05225]`, string(f.Geometry.Coordinates))
+
+	assert.Equal(t, "tyn201", f.Properties.ID)
+	assert.Equal(t, "tyn201", f.Properties.Name)
+	assert.Equal(t, "Bus", f.Properties.AssetType)
+
+	assert.Equal(t, []string{}, f.Properties.ConnectedAssets.Sources)
+	assert.Equal(t, []string{}, f.Properties.ConnectedAssets.Targets)
+
+	assert.Equal(t, []string{"POWERFLOW"}, f.Properties.GlossaryTerms)
 }

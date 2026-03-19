@@ -4,6 +4,15 @@ import "strings"
 
 // Utilities for dealing with OpenDSS files
 
+// Specs is just an arbitrary jsonserializable JSON object.
+// We need it to project arbitrary OpenDSS properties into GeoJSON properties.
+type Specs map[string]interface{}
+
+func (s Specs) String(key string) string {
+	v, _ := s[key].(string)
+	return v
+}
+
 // Parses a raw OpenDSS line of a given type (e.g. "Line", "Vsource"), returning
 // the element's ID and the remaining spec tokens. Returns ok=false if the line
 // is not a New/Edit statement for that type.

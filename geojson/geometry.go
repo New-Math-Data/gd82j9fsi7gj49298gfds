@@ -2,6 +2,9 @@ package geojson
 
 import "encoding/json"
 
+// "Helper" structs so you can more clearly create Geometry objects
+// instead of hard-coding internal fields like Type
+
 type Point Geometry
 
 func NewPoint(lon, lat float64) *Point {

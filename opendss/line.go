@@ -24,8 +24,8 @@ func NewLineFromOpenDSS(rawLine string) *Line {
 	}
 }
 
-// Convert Line from OpenDSS to GeoJSON.
-func (l *Line) ToFeature(busIndex map[BusID]*Bus) *geojson.Feature {
+// Convert Line from OpenDSS to GeoJSON. Resolves bus connectivity from input map.
+func (l *Line) ToGeoJSONFeature(busIndex map[BusID]*Bus) *geojson.Feature {
 	b1, ok1 := busIndex[l.BusID1]
 	b2, ok2 := busIndex[l.BusID2]
 

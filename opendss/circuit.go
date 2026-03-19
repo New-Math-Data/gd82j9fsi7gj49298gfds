@@ -9,20 +9,11 @@ import (
 	"opendss-assessment/geojson"
 )
 
-// Specs is just an arbitrary jsonserializable JSON object.
-// We need it to project arbitrary OpenDSS properties into GeoJSON properties.
-type Specs map[string]interface{}
-
-func (s Specs) String(key string) string {
-	v, _ := s[key].(string)
-	return v
-}
-
 // Circuit is the overall model for what's in the OpenDSS file.
 type Circuit struct {
 	lines    []*Line
 	vsources []*Vsource
-	buses    map[BusID]*Bus
+	buses    map[BusID]*Bus // allows O(1) lookups when determining connectivity of lines and Vsources
 }
 
 func NewCircuit() *Circuit {
@@ -63,6 +54,7 @@ func (c *Circuit) LoadCircuitModel(filePath string) error {
 			c.vsources = append(c.vsources, v)
 		}
 	}
+
 	return nil
 }
 
@@ -76,7 +68,7 @@ func (c *Circuit) ToGeoJSON() *geojson.FeatureCollection {
 	busFeatures := make([]*geojson.Feature, 0, len(c.buses))
 	busFeatureMap := make(map[BusID]*geojson.Feature, len(c.buses))
 	for _, b := range c.buses {
-		busFeatures = append(busFeatures, b.ToFeature())
+		busFeatures = append(busFeatures, b.ToGeoJsonFeature())
 		busFeatureMap[b.ID] = busFeatures[len(busFeatures)-1]
 	}
 
@@ -85,7 +77,7 @@ func (c *Circuit) ToGeoJSON() *geojson.FeatureCollection {
 	// and we are iterating linearly over the lines, so this remains O(n).
 	lineFeatures := make([]*geojson.Feature, len(c.lines))
 	for i, l := range c.lines {
-		lineFeatures[i] = l.ToFeature(c.buses)
+		lineFeatures[i] = l.ToGeoJSONFeature(c.buses)
 		bus1ID := BusID(lineFeatures[i].Properties.ConnectedAssets.Sources[0])
 		bus2ID := BusID(lineFeatures[i].Properties.ConnectedAssets.Targets[0])
 		lineID := lineFeatures[i].Properties.ID
@@ -102,7 +94,7 @@ func (c *Circuit) ToGeoJSON() *geojson.FeatureCollection {
 	// a hashmap with O(1) lookups to get the bus.
 	vsourceFeatures := make([]*geojson.Feature, len(c.vsources))
 	for i, v := range c.vsources {
-		vsourceFeatures[i] = v.ToFeature(c.buses)
+		vsourceFeatures[i] = v.ToGeoJSONFeature(c.buses)
 		bus1ID := BusID(vsourceFeatures[i].Properties.ConnectedAssets.Targets[0])
 		vsrcID := vsourceFeatures[i].Properties.ID
 		if bf, ok := busFeatureMap[bus1ID]; ok {
