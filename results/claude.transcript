@@ -93,3 +93,17 @@
 [User] Many of these methods that take in and return structs should take and return pointers.
 
 [Claude] Updated BuildGraph to accept *GeoJSONFeatureCollection and return *Graph; ShortestPath receiver changed to *Graph. ToGeoJSON() now returns *GeoJSONFeatureCollection. All callers (main.go, test files) updated accordingly. All tests pass. Regenerated results/output.json.
+
+[User] Write a build script to fix the name of the executable.
+
+[Claude] Created build.sh: `go build -o opendss-assessment .`
+
+[User] In geojson_test, finish converting the raw string to its marshalled version for test comparison.
+
+[Claude] Filled in all three features in the marshalled struct (Bus, Line, Vsource with full Properties and Geometry). Switched comparison from reflect.DeepEqual to assert.JSONEq — necessary because json.RawMessage preserves raw bytes including whitespace, so indented coordinates in the raw string would never byte-equal compact coordinates in the struct literal. Fixed pointer mismatch (loaded is *GeoJSONFeatureCollection, marshalled was a value).
+
+[User] Add tests for empty file, file not exists, empty features list, and unparseable.
+
+[Claude] Added TestLoadGeoJSONFileNotExists, TestLoadGeoJSONEmptyFile, TestLoadGeoJSONUnparseable, TestLoadGeoJSONEmptyFeatures. All assert error (or no error) and nil/non-nil return value as appropriate. All pass.
+
+[User] Update transcript.

@@ -7,13 +7,22 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"opendss-assessment/geojson"
+	"opendss-assessment/graph"
+	"opendss-assessment/opendss"
 )
 
+// this just allows you to use long-form command line args with one or two dashes:
+// opendss-assessment distance --source_node whatever -target_node whatver
 func normalizeDashes(args []string) []string {
 	normalized := make([]string, len(args))
 	for i, arg := range args {
 		if strings.HasPrefix(arg, "-") && !strings.HasPrefix(arg, "--") {
+			// you can specify with or without an equals:
+			// --my_arg=35 or -my_arg 35
 			name := strings.SplitN(arg[1:], "=", 2)[0]
+			// covers the case of -a=35  len(name)==1
 			if len(name) > 1 {
 				arg = "-" + arg
 			}
@@ -24,7 +33,7 @@ func normalizeDashes(args []string) []string {
 }
 
 func RunConvert(circuitModel, busCoords, outputFile string) error {
-	circuit := NewCircuit()
+	circuit := opendss.NewCircuit()
 	if err := circuit.LoadBusCoords(busCoords); err != nil {
 		return err
 	}
@@ -46,18 +55,31 @@ func RunConvert(circuitModel, busCoords, outputFile string) error {
 	return nil
 }
 
-func RunDistance(inputFile, sourceNode, targetNode string) error {
-	collection, err := LoadGeoJSON(inputFile)
+func RunDistance(inputFile, sourceNodeID, targetNodeID string) error {
+	collection, err := geojson.LoadGeoJSON(inputFile)
 	if err != nil {
 		return err
 	}
-	graph := BuildGraph(collection)
-	distance := graph.ShortestPath(sourceNode, targetNode)
-	fmt.Printf("Shortest path from %s to %s: %d\n", sourceNode, targetNode, distance)
+	g := collection.BuildGraph()
+
+	sourceNode := g.Node(graph.NodeID(sourceNodeID))
+	if sourceNode == nil {
+		return fmt.Errorf("source node %s not found", sourceNodeID)
+	}
+
+	targetNode := g.Node(graph.NodeID(targetNodeID))
+	if targetNode == nil {
+		return fmt.Errorf("target node %s not found", targetNodeID)
+	}
+
+	distance := g.ShortestPath(sourceNode, targetNode)
+	fmt.Printf("Shortest path from %s to %s: %d\n", sourceNodeID, targetNodeID, distance)
 	return nil
 }
 
 func main() {
+	// I use the cobra library for parsing the command line because it provides so
+	// many built-in utilities like a help function and parsing.
 	root := &cobra.Command{
 		Use:   "opendss-assessment",
 		Short: "OpenDSS to GeoJSON converter and graph path finder",

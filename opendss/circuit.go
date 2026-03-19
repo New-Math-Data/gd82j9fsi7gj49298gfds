@@ -1,29 +1,14 @@
-package main
+package opendss
 
 import (
 	"bytes"
 	"encoding/csv"
-	"encoding/json"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
+
+	"opendss-assessment/geojson"
 )
-
-type BusID string
-
-var busIDRe = regexp.MustCompile(`^(\d+)[_.]|^([^.]+)`)
-
-func NewBusID(raw string) BusID {
-	m := busIDRe.FindStringSubmatch(raw)
-	if m == nil {
-		return BusID(raw)
-	}
-	if m[1] != "" {
-		return BusID(m[1])
-	}
-	return BusID(m[2])
-}
 
 type Specs map[string]interface{}
 
@@ -32,24 +17,7 @@ func (s Specs) String(key string) string {
 	return v
 }
 
-type Bus struct {
-	ID  BusID
-	Lat float64
-	Lon float64
-}
-
-type Line struct {
-	ID    string
-	Specs Specs
-}
-
-type Vsource struct {
-	ID    string
-	Specs Specs
-}
-
 type Circuit struct {
-	buses    []*Bus
 	lines    []*Line
 	vsources []*Vsource
 	busIndex map[BusID]*Bus
@@ -75,9 +43,7 @@ func (c *Circuit) LoadBusCoords(filePath string) error {
 		id := BusID(strings.TrimSpace(row[0]))
 		lat, _ := strconv.ParseFloat(strings.TrimSpace(row[1]), 64)
 		lon, _ := strconv.ParseFloat(strings.TrimSpace(row[2]), 64)
-		b := &Bus{ID: id, Lat: lat, Lon: lon}
-		c.buses = append(c.buses, b)
-		c.busIndex[id] = b
+		c.busIndex[id] = &Bus{ID: id, Lat: lat, Lon: lon}
 	}
 	return nil
 }
@@ -122,79 +88,15 @@ func (c *Circuit) LoadCircuitModel(filePath string) error {
 	return nil
 }
 
-func (b *Bus) ToFeature() Feature {
-	coords, _ := json.Marshal([]float64{b.Lon, b.Lat})
-	return Feature{
-		Type:     "Feature",
-		Geometry: Geometry{Type: "Point", Coordinates: coords},
-		Properties: Properties{
-			ID:              string(b.ID),
-			Name:            string(b.ID),
-			AssetType:       "Bus",
-			GlossaryTerms:   []string{"POWERFLOW"},
-			ConnectedAssets: ConnectedAssets{Sources: []string{}, Targets: []string{}},
-		},
-	}
-}
-
-func (l *Line) ToFeature(busIndex map[BusID]*Bus) Feature {
-	bus1ID := NewBusID(l.Specs.String("bus1"))
-	bus2ID := NewBusID(l.Specs.String("bus2"))
-
-	var coords json.RawMessage
-	b1, ok1 := busIndex[bus1ID]
-	b2, ok2 := busIndex[bus2ID]
-	if ok1 && ok2 {
-		coords, _ = json.Marshal([][]float64{{b1.Lon, b1.Lat}, {b2.Lon, b2.Lat}})
+func (c *Circuit) ToGeoJSON() *geojson.GeoJSONFeatureCollection {
+	busFeatures := make([]geojson.Feature, 0, len(c.busIndex))
+	busFeatureMap := make(map[BusID]*geojson.Feature, len(c.busIndex))
+	for _, b := range c.busIndex {
+		busFeatures = append(busFeatures, b.ToFeature())
+		busFeatureMap[b.ID] = &busFeatures[len(busFeatures)-1]
 	}
 
-	id := "Line." + l.ID
-	return Feature{
-		Type:     "Feature",
-		Geometry: Geometry{Type: "LineString", Coordinates: coords},
-		Properties: Properties{
-			ID:              id,
-			Name:            id,
-			AssetType:       "Line",
-			Specifications:  l.Specs,
-			GlossaryTerms:   []string{},
-			ConnectedAssets: ConnectedAssets{Sources: []string{string(bus1ID)}, Targets: []string{string(bus2ID)}},
-		},
-	}
-}
-
-func (v *Vsource) ToFeature(busIndex map[BusID]*Bus) Feature {
-	bus1ID := NewBusID(v.Specs.String("bus1"))
-
-	var coords json.RawMessage
-	if b, ok := busIndex[bus1ID]; ok {
-		coords, _ = json.Marshal([]float64{b.Lon, b.Lat})
-	}
-
-	id := "Vsource." + v.ID
-	return Feature{
-		Type:     "Feature",
-		Geometry: Geometry{Type: "Point", Coordinates: coords},
-		Properties: Properties{
-			ID:              id,
-			Name:            id,
-			AssetType:       "Vsource",
-			Specifications:  v.Specs,
-			GlossaryTerms:   []string{"POWERFLOW"},
-			ConnectedAssets: ConnectedAssets{Sources: []string{}, Targets: []string{string(bus1ID)}},
-		},
-	}
-}
-
-func (c *Circuit) ToGeoJSON() *GeoJSONFeatureCollection {
-	busFeatures := make([]Feature, len(c.buses))
-	busFeatureMap := make(map[BusID]*Feature)
-	for i, b := range c.buses {
-		busFeatures[i] = b.ToFeature()
-		busFeatureMap[b.ID] = &busFeatures[i]
-	}
-
-	lineFeatures := make([]Feature, len(c.lines))
+	lineFeatures := make([]geojson.Feature, len(c.lines))
 	for i, l := range c.lines {
 		lineFeatures[i] = l.ToFeature(c.busIndex)
 		bus1ID := BusID(lineFeatures[i].Properties.ConnectedAssets.Sources[0])
@@ -208,7 +110,7 @@ func (c *Circuit) ToGeoJSON() *GeoJSONFeatureCollection {
 		}
 	}
 
-	vsourceFeatures := make([]Feature, len(c.vsources))
+	vsourceFeatures := make([]geojson.Feature, len(c.vsources))
 	for i, v := range c.vsources {
 		vsourceFeatures[i] = v.ToFeature(c.busIndex)
 		bus1ID := BusID(vsourceFeatures[i].Properties.ConnectedAssets.Targets[0])
@@ -218,12 +120,12 @@ func (c *Circuit) ToGeoJSON() *GeoJSONFeatureCollection {
 		}
 	}
 
-	var features []Feature
+	var features []geojson.Feature
 	features = append(features, busFeatures...)
 	features = append(features, lineFeatures...)
 	features = append(features, vsourceFeatures...)
 
-	return NewGeoJSONFeatureCollection(features)
+	return geojson.NewGeoJSONFeatureCollection(features)
 }
 
 func splitLines(s string) []string {

@@ -1,0 +1,29 @@
+linters:
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - revive
+    - misspell
+    - unused
+    - gosimple
+    - ineffassign
+
+linters-settings:
+  errcheck:
+    # json.Marshal on concrete types is safe to ignore
+    exclude-functions:
+      - encoding/json.Marshal
+      - encoding/json.MarshalIndent
+  revive:
+    rules:
+      - name: exported
+      - name: var-naming
+      - name: error-return
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - errcheck
+        - revive
