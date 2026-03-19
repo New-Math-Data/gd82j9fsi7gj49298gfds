@@ -96,8 +96,16 @@ func main() {
 	convertCmd.Flags().StringVar(&circuitModel, "circuit_model", "", "Path to the circuit model file (required)")
 	convertCmd.Flags().StringVar(&busCoords, "bus_coords", "", "Path to the bus coordinates file (required)")
 	convertCmd.Flags().StringVar(&outputFile, "output", "output.json", "Path to the output GeoJSON file")
-	convertCmd.MarkFlagRequired("circuit_model")
-	convertCmd.MarkFlagRequired("bus_coords")
+
+	if err := convertCmd.MarkFlagRequired("circuit_model"); err != nil {
+		fmt.Printf("programming error: %+v\n", err) // the cmd line parameter wasn't registered
+		os.Exit(1)
+	}
+
+	if err := convertCmd.MarkFlagRequired("bus_coords"); err != nil {
+		fmt.Printf("programming error: %+v\n", err) // the cmd line parameter wasn't registered
+		os.Exit(1)
+	}
 
 	var inputFile, sourceNode, targetNode string
 	distanceCmd := &cobra.Command{
@@ -110,8 +118,16 @@ func main() {
 	distanceCmd.Flags().StringVar(&inputFile, "input", "output.json", "Path to the GeoJSON file to read")
 	distanceCmd.Flags().StringVar(&sourceNode, "source_node", "", "Source bus ID (required)")
 	distanceCmd.Flags().StringVar(&targetNode, "target_node", "", "Target bus ID (required)")
-	distanceCmd.MarkFlagRequired("source_node")
-	distanceCmd.MarkFlagRequired("target_node")
+
+	if err := distanceCmd.MarkFlagRequired("source_node"); err != nil {
+		fmt.Printf("programming error: %+v\n", err) // the cmd line parameter wasn't registered
+		os.Exit(1)
+	}
+
+	if err := distanceCmd.MarkFlagRequired("target_node"); err != nil {
+		fmt.Printf("programming error: %+v\n", err) // the cmd line parameter wasn't registered
+		os.Exit(1)
+	}
 
 	root.AddCommand(convertCmd, distanceCmd)
 	root.SetArgs(normalizeDashes(os.Args[1:]))

@@ -5,7 +5,7 @@ import (
 	"os"
 )
 
-type GeoJSONFeatureCollection struct {
+type GeoJSONFeatureCollection struct { //nolint:revive // GeoJSONFeatureCollection is simply the defined name, even though it stutters
 	Type     string    `json:"type"`
 	Features []Feature `json:"features"`
 }
@@ -22,7 +22,7 @@ type Feature struct {
 
 type Geometry struct {
 	Type        string          `json:"type"`
-	Coordinates json.RawMessage `json:"coordinates"`
+	Coordinates json.RawMessage `json:"coordinates"` // structure varies depending on Point or LineString
 }
 
 type ConnectedAssets struct {
@@ -34,7 +34,7 @@ type Properties struct {
 	ID              string                 `json:"id"`
 	Name            string                 `json:"name"`
 	AssetType       string                 `json:"assetType"`
-	Specifications  map[string]interface{} `json:"specifications,omitempty"`
+	Specifications  map[string]interface{} `json:"specifications,omitempty"` // can be anything jsonserializable as a json object
 	ConnectedAssets ConnectedAssets        `json:"connected_assets"`
 	GlossaryTerms   []string               `json:"glossary_terms"`
 }
@@ -44,6 +44,7 @@ func LoadGeoJSON(filePath string) (*GeoJSONFeatureCollection, error) {
 	if err != nil {
 		return nil, err
 	}
+	// GeoJSONFeatureCollection is just a giant JSON, so we can unmarshal it directly!
 	var collection GeoJSONFeatureCollection
 	if err := json.Unmarshal(data, &collection); err != nil {
 		return nil, err

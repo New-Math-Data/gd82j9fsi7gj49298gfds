@@ -107,3 +107,53 @@
 [Claude] Added TestLoadGeoJSONFileNotExists, TestLoadGeoJSONEmptyFile, TestLoadGeoJSONUnparseable, TestLoadGeoJSONEmptyFeatures. All assert error (or no error) and nil/non-nil return value as appropriate. All pass.
 
 [User] Update transcript.
+
+[Claude] Appended all exchanges since last update to results/claude.transcript.
+
+[User] It turns out the bus coords file has duplicates. Eliminate the buses slice from Circuit and just keep busIndex — ordering is undefined when there are duplicates anyway.
+
+[Claude] Removed Circuit.buses field and all slice appends from LoadBusCoords. ToGeoJSON now ranges over Circuit.busIndex directly. Regenerated results/output.json. Bus output order is now non-deterministic but that is acceptable given duplicate coordinates.
+
+[User] Break up opendss.go into more files for readability: opendss_circuit, opendss_bus, opendss_line, opendss_vsource. Shared structs/utilities stay in opendss_circuit.
+
+[Claude] Split opendss.go into circuit.go (Specs, Circuit, NewCircuit, LoadBusCoords, LoadCircuitModel, ToGeoJSON, splitLines, parseSpecs), bus.go (BusID, busIDRe, NewBusID, Bus, Bus.ToFeature), line.go (Line, Line.ToFeature), vsource.go (Vsource, Vsource.ToFeature). All tests pass.
+
+[User] Put opendss, geojson, and graph into their own subdirectories/packages. To prevent circular deps, move BuildGraph to geojson as GeoJSONFeatureCollection.BuildGraph().
+
+[Claude] Created opendss/, geojson/, graph/ subdirectories with proper package declarations. Moved BuildGraph to geojson/build_graph.go as a method on *GeoJSONFeatureCollection returning *graph.Graph. Dependency chain: graph ← geojson ← opendss ← main. Updated go.mod module path and all import statements throughout. Moved TestBuildGraphUndirected to geojson package (graph_test.go would create circular import). All tests pass.
+
+[User] Make the graph abstraction more explicit with Node and Edge structs instead of wrapping a plain map.
+
+[Claude] Introduced Node (ID NodeID), Edge (From, To *Node), Graph with nodes map[NodeID]*Node, edges []*Edge, adj map[NodeID][]*Node. NewGraph(nodes, edges) constructor builds adjacency list. Added Node(), Nodes(), Edges() accessors. ShortestPath takes *Node parameters. BFS visited set changed to map[NodeID]bool. Updated all callers and tests.
+
+[User] ShortestPath should take nodes, not strings.
+
+[Claude] Already done in the previous step.
+
+[User] Use type NodeID string to make it more explicit when a string is actually a node ID.
+
+[Claude] Already done — NodeID introduced as named type. graph.NodeID(id) conversions at call sites in main.go and geojson/build_graph.go.
+
+[User] Refactor opendss_test and graph_test to use assert instead of if statements.
+
+[Claude] Replaced all manual if/t.Errorf patterns in opendss_test.go and graph_test.go with testify assert calls (assert.Equal, assert.NoError, assert.Nil, assert.True). Added TestShortestPathNilNode to graph_test.go.
+
+[User] Add scaffolding for linting and other standard Go project maintenance infrastructure.
+
+[Claude] Created .golangci.yml (errcheck, govet, staticcheck, revive, misspell, unused, gosimple, ineffassign; excludes json.Marshal from errcheck; relaxes errcheck/revive for test files). Created .github/workflows/ci.yml (two jobs: build-and-test runs go vet + go test + go build; lint runs golangci-lint-action). Created Makefile (build, test, lint, fmt, vet, clean targets). Fixed two linter-flagged issues in circuit.go (unused variable, unchecked error).
+
+[User] Turn Geometry into an interface with concrete Point and LineString types.
+
+[Claude] Implemented Geometry as interface with MarshalJSON. Created Point and LineString concrete types. Updated Feature to use interface field. Added Feature.UnmarshalJSON to dispatch on "type" field.
+
+[User] Actually that made this overly complex. Revert.
+
+[Claude] Reverted Geometry back to plain struct with Type string and Coordinates json.RawMessage. Removed Point/LineString types and custom UnmarshalJSON. All tests pass.
+
+[User] Add a new file geometry.go under geojson that provides utility constructors: NewPoint, NewLineString, etc.
+
+[Claude] Created geojson/geometry.go with NewPoint(lon, lat float64) Geometry and NewLineString(points ...[2]float64) Geometry. Updated bus.go, line.go, and vsource.go to use these constructors, removing encoding/json imports from those files.
+
+[User] Update the claude transcript. Also, update it automatically before every context compaction.
+
+[Claude] Appended all exchanges since last update to results/claude.transcript. Saving a feedback memory to always update the transcript before compacting.

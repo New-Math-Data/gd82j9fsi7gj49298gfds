@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+
 func TestLoadGeoJSON(t *testing.T) {
 	// Tests loading one of every type of object: Line, Bus, Vsource
 	marshalled := &GeoJSONFeatureCollection{

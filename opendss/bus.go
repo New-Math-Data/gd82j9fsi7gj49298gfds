@@ -1,7 +1,6 @@
 package opendss
 
 import (
-	"encoding/json"
 	"regexp"
 
 	"opendss-assessment/geojson"
@@ -29,10 +28,9 @@ type Bus struct {
 }
 
 func (b *Bus) ToFeature() geojson.Feature {
-	coords, _ := json.Marshal([]float64{b.Lon, b.Lat})
 	return geojson.Feature{
 		Type:     "Feature",
-		Geometry: geojson.Geometry{Type: "Point", Coordinates: coords},
+		Geometry: geojson.Geometry(geojson.NewPoint(b.Lon, b.Lat)),
 		Properties: geojson.Properties{
 			ID:              string(b.ID),
 			Name:            string(b.ID),
